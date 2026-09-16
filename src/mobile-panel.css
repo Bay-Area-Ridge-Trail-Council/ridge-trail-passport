@@ -3,6 +3,7 @@
 
 @media (max-width:800px){
   aside{height:64px;min-height:64px;transition:height .16s ease}
+  .leaflet-control-zoom{display:none}
   /* Treat Passport chrome as app UI: keep normal scrolling/pinch zoom, but avoid browser double-tap zoom. */
   aside,aside *,.map-actions,.map-actions *,.map-hint,.sheet,.sheet *,.help-backdrop,.help-backdrop *{touch-action:manipulation}
   .brand{height:64px;padding:7px 10px;border-bottom:0}
