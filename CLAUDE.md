@@ -102,7 +102,7 @@ Node version is pinned in `.node-version`.
 - Known issue: iOS Safari deletes localStorage, IndexedDB, and service worker
   caches after seven days without interaction. Home-screen installs are exempt.
   This is why the install flow matters and why storage failures must be visible.
-- The repository is moving to the Bay Area Ridge Trail Council organization
-  account.
+- The repository is owned by the Bay Area Ridge Trail Council organization
+  account on GitHub.
 - Ridge Trail names and logos are Council property and are separate from the
   source code. Do not add, alter, or remove branding assets.
