@@ -5,12 +5,27 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#003B5D" />
   <meta name="description" content="Explore the Bay Area Ridge Trail and track your completed trail sections." />
+  <!-- Beta: keep the Passport out of search results. -->
+  <meta name="robots" content="noindex, nofollow" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-title" content="Ridge Trail" />
   <link rel="icon" type="image/png" href="./ridge-trail-logo.png" />
   <link rel="apple-touch-icon" sizes="180x180" href="./ridge-trail-app-icon-180.png" />
   <link rel="manifest" href="./manifest.webmanifest" />
   <title>Ridge Trail Passport</title>
+  <script>
+    // Decide before the page first appears whether the beta notice is needed,
+    // so returning visitors never see it flash and new visitors never see the
+    // app flash first. The key and version must match CONFIG.betaNotice in
+    // src/config.js (a test checks this).
+    try {
+      if (!(Number(localStorage.getItem("ridgeTrailPassportBetaNoticeAcknowledged")) >= 1)) {
+        document.documentElement.classList.add("beta-notice-pending");
+      }
+    } catch {
+      document.documentElement.classList.add("beta-notice-pending");
+    }
+  </script>
 </head>
 <body>
   <div id="app">
@@ -71,6 +86,7 @@
             <span class="toggle-switch"></span>
             <span>Uncompleted only</span>
           </label>
+          <a class="feedback-link" id="feedbackListLink" target="_blank" rel="noopener noreferrer" aria-label="Send beta feedback (opens a form in a new tab)">Send beta feedback ↗</a>
         </div>
 
         <div id="list"></div>
@@ -104,7 +120,12 @@
           </svg>
           <span>Help</span>
         </button>
-        <button class="map-btn danger" id="resetBtn" type="button">Reset</button>
+        <a class="map-btn" id="feedbackBtn" target="_blank" rel="noopener noreferrer" aria-label="Send feedback (opens a form in a new tab)" title="Send feedback">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+            <path d="M20 15.5a2 2 0 0 1-2 2H8.5L4 21V6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2Z" />
+          </svg>
+          <span>Feedback</span>
+        </a>
       </div>
 
       <div class="legend" aria-label="Trail type legend">
@@ -193,6 +214,7 @@
             <div class="help-backup-actions">
               <button class="help-backup-btn" id="exportProgressBtn" type="button">Export Progress</button>
               <button class="help-backup-btn" id="importProgressBtn" type="button">Import Progress</button>
+              <button class="help-backup-btn help-clear-progress-btn danger" id="resetBtn" type="button">Clear all progress</button>
             </div>
             <div class="help-backup-status" id="progressBackupStatus" role="status" aria-live="polite" aria-atomic="true" hidden></div>
             <input id="progressFileInput" type="file" accept=".json,application/json" hidden />
@@ -233,6 +255,26 @@
         </section>
       </div>
     </main>
+  </div>
+
+  <!-- First-run beta notice. Shown until the visitor ticks the box and taps
+       Start (see initializeBetaNotice in src/main.js). Uses the same dialog
+       pattern and styles as the Help panel. -->
+  <div class="help-backdrop beta-notice-backdrop" id="betaNoticeBackdrop" hidden>
+    <section class="help-panel beta-notice-panel" id="betaNoticePanel" role="dialog" aria-modal="true" aria-labelledby="betaNoticeTitle" aria-describedby="betaNoticeText">
+      <h2 id="betaNoticeTitle">Ridge Trail Passport Beta</h2>
+      <div id="betaNoticeText">
+        <p>Explore the Ridge Trail and track the sections you've hiked. Tap <svg class="inline-help-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"> <circle cx="12" cy="12" r="10" /> <path d="M9.09 9a3 3 0 1 1 5.83 1c0 2-2.92 2.45-2.92 4" /> <path d="M12 17h.01" /> </svg> Help any time for install instructions, backups, and tips.</p>
+        <p>It's a test version. Things may break, and your progress is saved only on this device.</p>
+        <p>It's not a navigation tool. Conditions, closures, and access change, and some sections need permission. Check with the land manager before you go.</p>
+        <p>This link is just for beta testers for now.</p>
+      </div>
+      <label class="beta-notice-check">
+        <input type="checkbox" id="betaNoticeAgree" />
+        <span>I understand this is a test version, that my saved progress may be lost, and that I'm responsible for my own safety on the trail.</span>
+      </label>
+      <button class="primary beta-notice-start" id="betaNoticeStart" type="button" disabled>Start</button>
+    </section>
   </div>
 
   <script type="module" src="./src/main.js"></script>

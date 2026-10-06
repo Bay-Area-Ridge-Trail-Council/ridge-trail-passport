@@ -19,6 +19,10 @@
 .help-backup-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:11px}
 .help-backup-btn{border:1px solid #B8DEE6;border-radius:10px;padding:10px 12px;background:white;color:var(--rt-dark-blue);font-size:12.5px;font-weight:800}
 .help-backup-btn:hover{background:#F2FAFB;border-color:var(--rt-sky-blue)}
+/* Clear all progress: full width under Export / Import, in the danger red,
+   so a backup is the obvious first step. */
+.help-clear-progress-btn{grid-column:1/-1;color:var(--rt-red);border-color:rgba(212,69,38,.35)}
+.help-clear-progress-btn:hover{background:#FFF2EE;border-color:var(--rt-red)}
 .help-backup-status[hidden]{display:none}
 .help-backup-status{margin-top:9px;padding:9px 11px;border:1px solid #CBE7EC;border-radius:10px;background:#EAF6F8;color:var(--rt-dark-blue);font-size:12px;font-weight:700;line-height:1.4}
 .help-backup-status.is-error{border-color:#F3C5B8;background:#FFF2EE;color:#9D351D}
@@ -43,3 +47,17 @@
   .help-intro{margin-bottom:16px}
   .help-install-grid,.help-backup-actions,.help-companion-grid,.help-resource-grid{grid-template-columns:1fr}
 }
+
+/* First-run beta notice: reuses the Help panel styles above, but covers the
+   whole page (sidebar included) and sits above everything else. */
+.beta-notice-backdrop{position:fixed;z-index:2000}
+/* Set by the small script in index.html before the page first appears. */
+.beta-notice-pending .beta-notice-backdrop[hidden]{display:flex}
+.beta-notice-panel{width:min(520px,100%)}
+.beta-notice-panel h2{margin-right:0}
+.beta-notice-panel p{margin:0 0 11px;font-size:14px;line-height:1.5;color:#385669}
+.inline-help-icon{width:1em;height:1em;vertical-align:middle}
+.beta-notice-check{display:flex;gap:10px;align-items:flex-start;margin:16px 0;padding:12px;border:1px solid var(--line);border-radius:12px;background:#FAFCFD;font-size:13.5px;line-height:1.45;color:var(--ink);cursor:pointer}
+.beta-notice-check input{flex:0 0 auto;width:20px;height:20px;margin:1px 0 0;accent-color:var(--done)}
+.beta-notice-start{width:100%;padding:12px;font-size:15px}
+.beta-notice-start:disabled{opacity:.45;cursor:not-allowed}

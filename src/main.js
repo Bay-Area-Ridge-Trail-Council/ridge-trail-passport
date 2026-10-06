@@ -14,6 +14,8 @@ import {
 } from "./offline.js";
 import { createProgressStore } from "./progress.js";
 import { createUI } from "./ui.js";
+import { acknowledgeBetaNotice, isBetaNoticeAcknowledged } from "./beta-notice.js";
+import { CONFIG } from "./config.js";
 import { isCompletionEligible } from "./trails.js";
 import { $ } from "./utils.js";
 
@@ -193,6 +195,54 @@ function initializeHelpPanel() {
       closeHelp();
     }
   });
+}
+
+// First-run beta notice. Same dialog pattern as the Help panel, but it can't
+// be dismissed with Escape or a backdrop click: ticking the box and tapping
+// Start is the only way through. While it is open, the rest of the app is
+// made inert so keyboard and screen-reader users stay inside the notice.
+function initializeBetaNotice() {
+  const root = document.documentElement;
+  const app = $("app");
+  const backdrop = $("betaNoticeBackdrop");
+  const agree = $("betaNoticeAgree");
+  const start = $("betaNoticeStart");
+
+  if (!backdrop || !agree || !start || isBetaNoticeAcknowledged()) {
+    root.classList.remove("beta-notice-pending");
+    return;
+  }
+
+  backdrop.hidden = false;
+  root.classList.remove("beta-notice-pending");
+  app.inert = true;
+  start.disabled = !agree.checked;
+
+  agree.addEventListener("change", () => {
+    start.disabled = !agree.checked;
+  });
+
+  start.addEventListener("click", () => {
+    if (!agree.checked) return;
+
+    // If storage is unavailable this returns false; the notice will simply
+    // appear again on the next visit.
+    acknowledgeBetaNotice();
+
+    backdrop.hidden = true;
+    app.inert = false;
+  });
+
+  agree.focus();
+}
+
+// Feedback buttons only link to the form. Nothing is sent unless the visitor
+// taps one and fills the form in themselves.
+function initializeFeedbackLinks() {
+  for (const id of ["feedbackBtn", "feedbackListLink"]) {
+    const link = $(id);
+    if (link) link.href = CONFIG.feedbackFormUrl;
+  }
 }
 
 function initializeCompanionLinks() {
@@ -453,6 +503,8 @@ function initializeBackgroundRefresh() {
 }
 
 async function initialize() {
+  initializeBetaNotice();
+  initializeFeedbackLinks();
   initializeMobilePanelToggle();
   initializeHelpPanel();
   initializeCompanionLinks();

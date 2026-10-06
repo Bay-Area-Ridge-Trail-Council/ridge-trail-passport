@@ -60,5 +60,21 @@ export const CONFIG = {
     selected: "#ffffff"
   },
 
-  storageKey: "ridgeTrailPassportProgress"
+  storageKey: "ridgeTrailPassportProgress",
+
+  // First-run beta notice. Once a visitor ticks the box and taps Start, this
+  // version number is saved under storageKey. Raise the version when the
+  // notice text changes materially, so everyone sees it again.
+  // index.html repeats both values in a small script at the top of the page
+  // (it runs before this file loads, to avoid a flash of the app); keep them
+  // in step. tests/core.test.js checks that they match.
+  betaNotice: {
+    storageKey: "ridgeTrailPassportBetaNoticeAcknowledged",
+    version: 1
+  },
+
+  // Google Form for beta feedback. Opened only when someone taps a Feedback
+  // button; the Passport never sends anything to it on its own.
+  feedbackFormUrl:
+    "https://docs.google.com/forms/d/e/1FAIpQLScIWdgrah9zdvmb9KKJPdm8SHHID8RIENliH8HrBwL84hkEsw/viewform"
 };

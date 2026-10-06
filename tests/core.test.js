@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { CONFIG } from "../src/config.js";
+import { acknowledgeBetaNotice, isBetaNoticeAcknowledged } from "../src/beta-notice.js";
 import { fetchTrailFeatures, uniqueValues, validateSegmentIds } from "../src/data.js";
 import { createProgressStore } from "../src/progress.js";
 import {
@@ -248,4 +249,85 @@ test("trail query asks ArcGIS for coordinates rounded to the configured precisio
   assert.equal(requested.length, 1);
   assert.equal(requested[0].searchParams.get("geometryPrecision"), "6");
   assert.equal(requested[0].searchParams.get("outSR"), "4326");
+});
+
+test("beta notice is shown until acknowledged, and again after a version bump", () => {
+  const storage = new MemoryStorage();
+
+  assert.equal(isBetaNoticeAcknowledged(storage), false);
+  assert.equal(acknowledgeBetaNotice(storage), true);
+  assert.equal(isBetaNoticeAcknowledged(storage), true);
+  assert.equal(
+    storage.getItem(CONFIG.betaNotice.storageKey),
+    String(CONFIG.betaNotice.version)
+  );
+
+  // An acknowledgment of an older notice does not count.
+  storage.setItem(CONFIG.betaNotice.storageKey, String(CONFIG.betaNotice.version - 1));
+  assert.equal(isBetaNoticeAcknowledged(storage), false);
+
+  // Acknowledging does not touch saved progress.
+  assert.equal(storage.getItem(CONFIG.storageKey), null);
+});
+
+test("beta notice never blocks the app when storage is unavailable", () => {
+  const broken = {
+    getItem() { throw new Error("blocked"); },
+    setItem() { throw new Error("blocked"); }
+  };
+
+  assert.equal(isBetaNoticeAcknowledged(broken), false);
+  assert.equal(acknowledgeBetaNotice(broken), false);
+  assert.equal(isBetaNoticeAcknowledged(null), false);
+  assert.equal(acknowledgeBetaNotice(null), false);
+});
+
+test("index.html keeps the beta out of search results and matches the beta notice settings", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const html = await readFile(new URL("../index.html", import.meta.url), "utf8");
+
+  assert.match(html, /<meta name="robots" content="noindex, nofollow"\s*\/?>/);
+
+  // The early script in <head> must use the same storage key and version as
+  // CONFIG, or the notice would flash or be skipped on load.
+  const head = html.slice(0, html.indexOf("</head>"));
+  assert.ok(head.includes(`"${CONFIG.betaNotice.storageKey}"`));
+  assert.match(head, new RegExp(`>=\\s*${CONFIG.betaNotice.version}\\b`));
+
+  // The feedback form address lives in config.js, not in the markup.
+  assert.ok(!html.includes(CONFIG.feedbackFormUrl));
+  assert.match(CONFIG.feedbackFormUrl, /^https:\/\/docs\.google\.com\/forms\//);
+});
+
+test("Clear all progress lives with the backup actions, not among the map controls", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const html = await readFile(new URL("../index.html", import.meta.url), "utf8");
+
+  const between = (start, end) => {
+    const from = html.indexOf(start);
+    return from === -1 ? "" : html.slice(from, html.indexOf(end, from));
+  };
+  const mapControls = between('<div class="map-actions">', '<div class="legend"');
+  const backupActions = between('<div class="help-backup-actions">', "</div>");
+
+  assert.ok(mapControls.length > 0 && backupActions.length > 0);
+  assert.ok(!mapControls.includes('id="resetBtn"'), "Reset must not be in the map controls");
+  assert.match(backupActions, /id="resetBtn"[^>]*>Clear all progress</);
+  assert.ok(backupActions.includes('id="exportProgressBtn"'));
+});
+
+test("status messages show in front of the Help panel but behind the beta notice", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const css = (await Promise.all(
+    ["styles.css", "help.css"].map((name) => readFile(new URL(`../src/${name}`, import.meta.url), "utf8"))
+  )).join("\n");
+  const zIndexOf = (selector) => {
+    const rule = css.match(new RegExp(`(^|\\n)${selector.replace(".", "\\.")}\\{[^}]*z-index:(\\d+)`));
+    assert.ok(rule, `no z-index found for ${selector}`);
+    return Number(rule[2]);
+  };
+
+  // "Progress reset." appears while Help is open (Clear all progress lives there).
+  assert.ok(zIndexOf(".status") > zIndexOf(".help-backdrop"));
+  assert.ok(zIndexOf(".status") < zIndexOf(".beta-notice-backdrop"));
 });
