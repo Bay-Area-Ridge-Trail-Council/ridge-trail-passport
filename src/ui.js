@@ -8,13 +8,16 @@ import {
   milesFor,
   trailTypeLabel
 } from "./trails.js";
-import { $, escapeHtml, normalizeUrl } from "./utils.js";
+import { $, debounce, escapeHtml, normalizeUrl } from "./utils.js";
+
+const SEARCH_DEBOUNCE_MS = 200;
 
 export function createUI({
   progressStore,
   onSelect,
   onToggleComplete,
   onFiltersChange,
+  onSearchInput,
   onCloseDetails,
   onHome,
   onReset,
@@ -448,10 +451,21 @@ export function createUI({
     });
   }
 
-  $("search").addEventListener("input", onFiltersChange);
+  // Rebuilding the map on every keystroke is slow on phones, so the search
+  // box updates the list right away and waits for a pause in typing before
+  // updating the map. The other filters still apply immediately.
+  const searchFiltersChange = debounce(onFiltersChange, SEARCH_DEBOUNCE_MS);
+
+  $("search").addEventListener("input", () => {
+    onSearchInput();
+    searchFiltersChange();
+  });
 
   for (const id of ["county", "region", "unfinished"]) {
-    $(id).addEventListener("change", onFiltersChange);
+    $(id).addEventListener("change", () => {
+      searchFiltersChange.cancel();
+      onFiltersChange();
+    });
   }
 
   $("closeSheet").onclick = onCloseDetails;

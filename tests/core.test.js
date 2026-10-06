@@ -11,7 +11,7 @@ import {
   milesFor,
   trailTypeLabel
 } from "../src/trails.js";
-import { normalizeUrl } from "../src/utils.js";
+import { debounce, normalizeUrl } from "../src/utils.js";
 
 class MemoryStorage {
   constructor() { this.values = new Map(); }
@@ -209,4 +209,27 @@ test("external links accept only http and https URLs", () => {
   assert.equal(normalizeUrl("javascript:alert(1)"), null);
   assert.equal(normalizeUrl("mailto:test@example.com"), null);
   assert.equal(normalizeUrl("not a url"), null);
+});
+
+test("debounce runs once after a pause and can be cancelled", (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+
+  const calls = [];
+  const debounced = debounce((value) => calls.push(value), 200);
+
+  debounced("r");
+  t.mock.timers.tick(100);
+  debounced("ri");
+  t.mock.timers.tick(100);
+  debounced("rid");
+  t.mock.timers.tick(199);
+  assert.deepEqual(calls, []);
+
+  t.mock.timers.tick(1);
+  assert.deepEqual(calls, ["rid"]);
+
+  debounced("ridge");
+  debounced.cancel();
+  t.mock.timers.tick(500);
+  assert.deepEqual(calls, ["rid"]);
 });
