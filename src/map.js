@@ -30,6 +30,11 @@ const LOCATE_ZOOM = 11;
 const TOUCH_TOLERANCE_PX = 9;
 const MOUSE_TOLERANCE_PX = 3;
 
+// Trail tiling (see addAppLayers). Chosen for long trail lines viewed mostly
+// at regional zooms; explained in the pull request that introduced them.
+const TRAIL_TILE_MAXZOOM = 16;
+const TRAIL_SIMPLIFY_TOLERANCE_PX = 1;
+
 // Shown instead of the basemap if its style cannot be loaded (for example
 // offline), so the trail still draws. Matches Leaflet's grey background.
 const FALLBACK_STYLE = {
@@ -162,7 +167,15 @@ export function createRidgeMap({ onSelect, onBlankMapClick, isDone }) {
     map.addSource(TRAIL_SOURCE, {
       type: "geojson",
       data: emptyCollection(),
-      promoteId: "OBJECTID"
+      promoteId: "OBJECTID",
+      // MapLibre cuts the trail into tiles in its background worker. Tiles
+      // are only built up to TRAIL_TILE_MAXZOOM; closer in, those tiles are
+      // enlarged. Tiles at that zoom keep every point of the original line,
+      // so the trail stays accurate at the map's maximum zoom.
+      maxzoom: TRAIL_TILE_MAXZOOM,
+      // At lower zooms, points closer together than this (in screen pixels)
+      // are merged. Less than a pixel is not visible on a 3.5px-wide line.
+      tolerance: TRAIL_SIMPLIFY_TOLERANCE_PX
     });
 
     map.addSource(LOCATION_SOURCE, {
