@@ -364,10 +364,35 @@ test("beta notice emphasises its three key statements with <strong>", async () =
   const html = await readFile(new URL("../index.html", import.meta.url), "utf8");
   const notice = html.slice(html.indexOf('id="betaNoticeText"'), html.indexOf('class="beta-notice-check"'));
 
-  assert.ok(notice.includes("<p><strong>It's a test version.</strong> Things may break, and your progress is saved only on this device.</p>"));
+  assert.ok(notice.includes("<p><strong>It's a test version.</strong> Things may change or not work as expected, and your progress is saved only on this device.</p>"));
   assert.ok(notice.includes("<p><strong>It's not a navigation tool.</strong> Conditions, closures, and access change, and some sections need permission. Check with the land manager before you go.</p>"));
   assert.ok(notice.includes("<p><strong>This link is just for beta testers for now.</strong></p>"));
   // The intro paragraph stays plain.
   assert.ok(notice.includes("<p>Explore the Ridge Trail"));
   assert.equal((notice.match(/<strong>/g) || []).length, 3);
+});
+
+test("beta notice intro points people to Help with the Help icon", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const html = await readFile(new URL("../index.html", import.meta.url), "utf8");
+  const intro = html.match(/<p>Explore the Ridge Trail[\s\S]*?<\/p>/)[0];
+  const text = intro.replace(/<svg[\s\S]*?<\/svg>/, "(?)");
+
+  assert.equal(text, "<p>Explore the Ridge Trail and track the sections you've hiked. Stuck or curious? Tap (?) Help for additional tips and information.</p>");
+  // The icon is still the Help button's own icon, inline at text size.
+  assert.match(intro, /<svg class="inline-help-icon"[^>]*aria-hidden="true"/);
+});
+
+test("beta notice checkbox lines up with the first line of its label", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const css = await readFile(new URL("../src/help.css", import.meta.url), "utf8");
+  const box = css.match(/\.beta-notice-check input\{([^}]*)\}/)[1];
+  const label = css.match(/\.beta-notice-check\{([^}]*)\}/)[1];
+
+  // Top-aligned row, with the 24px box nudged so its centre sits on the
+  // centre of the first 1.45-line-height line, at any number of lines.
+  assert.match(label, /align-items:flex-start/);
+  assert.match(label, /line-height:1\.45/);
+  assert.match(box, /width:24px;height:24px/);
+  assert.match(box, /margin-top:calc\(\(1\.45em - 24px\) \/ 2\)/);
 });
