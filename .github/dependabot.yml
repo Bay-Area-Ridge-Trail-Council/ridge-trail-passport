@@ -9,11 +9,6 @@ updates:
     # Security fixes are not delayed by this.
     cooldown:
       default-days: 7
-    # Bundle all npm updates into one pull request per month.
-    groups:
-      npm-packages:
-        patterns:
-          - "*"
 
   - package-ecosystem: github-actions
     directory: /
