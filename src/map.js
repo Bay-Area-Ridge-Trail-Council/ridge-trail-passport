@@ -32,7 +32,7 @@ const MOUSE_TOLERANCE_PX = 3;
 
 // Trail tiling (see addAppLayers). Chosen for long trail lines viewed mostly
 // at regional zooms; explained in the pull request that introduced them.
-const TRAIL_TILE_MAXZOOM = 14;
+const TRAIL_TILE_MAXZOOM = 16;
 const TRAIL_SIMPLIFY_TOLERANCE_PX = 1;
 
 // Shown instead of the basemap if its style cannot be loaded (for example
@@ -418,16 +418,10 @@ export function createRidgeMap({ onSelect, onBlankMapClick, isDone }) {
     }
   });
 
-  // Pointer cursor when hovering a trail line. MapLibre reports when the
-  // pointer enters or leaves the trail layers, so this needs no hit-testing
-  // of its own (and no click tolerance — the cursor only changes directly
-  // over a line, while clicks still have the wider tolerance above).
-  map.on("mouseenter", TRAIL_LAYERS, () => {
-    map.getCanvas().style.cursor = "pointer";
-  });
-
-  map.on("mouseleave", TRAIL_LAYERS, () => {
-    map.getCanvas().style.cursor = "";
+  // Pointer cursor when hovering a trail line, as before.
+  map.on("mousemove", (event) => {
+    const overTrail = Boolean(trailFeatureAt(event.point, MOUSE_TOLERANCE_PX));
+    map.getCanvas().style.cursor = overTrail ? "pointer" : "";
   });
 
   // --- Camera -----------------------------------------------------------------
