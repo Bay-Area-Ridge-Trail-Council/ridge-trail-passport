@@ -261,13 +261,13 @@
        Start (see initializeBetaNotice in src/main.js). Uses the same dialog
        pattern and styles as the Help panel. -->
   <div class="help-backdrop beta-notice-backdrop" id="betaNoticeBackdrop" hidden>
-    <section class="help-panel beta-notice-panel" id="betaNoticePanel" role="dialog" aria-modal="true" aria-labelledby="betaNoticeTitle" aria-describedby="betaNoticeText">
+    <section class="help-panel beta-notice-panel" id="betaNoticePanel" tabindex="-1" role="dialog" aria-modal="true" aria-labelledby="betaNoticeTitle" aria-describedby="betaNoticeText">
       <h2 id="betaNoticeTitle">Ridge Trail Passport Beta</h2>
       <div id="betaNoticeText">
         <p>Explore the Ridge Trail and track the sections you've hiked. Tap <svg class="inline-help-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"> <circle cx="12" cy="12" r="10" /> <path d="M9.09 9a3 3 0 1 1 5.83 1c0 2-2.92 2.45-2.92 4" /> <path d="M12 17h.01" /> </svg> Help any time for install instructions, backups, and tips.</p>
-        <p>It's a test version. Things may break, and your progress is saved only on this device.</p>
-        <p>It's not a navigation tool. Conditions, closures, and access change, and some sections need permission. Check with the land manager before you go.</p>
-        <p>This link is just for beta testers for now.</p>
+        <p><strong>It's a test version.</strong> Things may break, and your progress is saved only on this device.</p>
+        <p><strong>It's not a navigation tool.</strong> Conditions, closures, and access change, and some sections need permission. Check with the land manager before you go.</p>
+        <p><strong>This link is just for beta testers for now.</strong></p>
       </div>
       <label class="beta-notice-check">
         <input type="checkbox" id="betaNoticeAgree" />

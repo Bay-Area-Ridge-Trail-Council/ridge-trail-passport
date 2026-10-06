@@ -58,6 +58,15 @@
 .beta-notice-panel p{margin:0 0 11px;font-size:14px;line-height:1.5;color:#385669}
 .inline-help-icon{width:1em;height:1em;vertical-align:middle}
 .beta-notice-check{display:flex;gap:10px;align-items:flex-start;margin:16px 0;padding:12px;border:1px solid var(--line);border-radius:12px;background:#FAFCFD;font-size:13.5px;line-height:1.45;color:var(--ink);cursor:pointer}
-.beta-notice-check input{flex:0 0 auto;width:20px;height:20px;margin:1px 0 0;accent-color:var(--done)}
+/* The checkbox is drawn by hand (appearance:none) so the keyboard focus ring
+   lines up with the box on every browser, including iOS Safari. The ring
+   shows for keyboard focus only (:focus-visible), never on mouse or touch.
+   The whole label is the tap target. */
+.beta-notice-check input{appearance:none;-webkit-appearance:none;flex:0 0 auto;width:24px;height:24px;margin:0;padding:0;border:2px solid #7A8B95;border-radius:6px;background:#fff center/16px 16px no-repeat;cursor:pointer}
+.beta-notice-check input:checked{background-color:var(--done);border-color:var(--done);background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E")}
+.beta-notice-check input:focus{outline:none}
+.beta-notice-check input:focus-visible{outline:3px solid var(--rt-dark-blue);outline-offset:2px}
+/* The dialog itself takes focus when the notice opens (see main.js). */
+.beta-notice-panel:focus{outline:none}
 .beta-notice-start{width:100%;padding:12px;font-size:15px}
 .beta-notice-start:disabled{opacity:.45;cursor:not-allowed}
