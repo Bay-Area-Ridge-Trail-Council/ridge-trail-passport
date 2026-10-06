@@ -17,13 +17,13 @@
   #homeBtn,#locateBtn,#feedbackBtn{width:42px;height:42px;padding:0;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;background:rgba(255,255,255,.97)}
   #homeBtn svg,#locateBtn svg,#feedbackBtn svg{display:block;width:23px;height:23px;flex:0 0 auto}
   #homeBtn span,#locateBtn span{display:none}
-  #resetBtn{height:42px;padding:0 14px;border-radius:999px;border:1px solid rgba(212,69,38,.22);background:rgba(255,255,255,.97);font-size:12px}
   .map-actions .map-btn:hover{transform:translateY(-1px)}
 }
 
 /* Below this width the centred hint would run into the map buttons at the
-   bottom right, so it is hidden. Measured with all five buttons shown. */
-@media (min-width:801px) and (max-width:1420px){
+   bottom right, so it is hidden. Measured with the four round buttons
+   (Home, My location, Help, Feedback); re-measure if buttons are added. */
+@media (min-width:801px) and (max-width:1300px){
   .map-hint{display:none}
 }
 

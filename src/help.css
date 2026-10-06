@@ -19,6 +19,10 @@
 .help-backup-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:11px}
 .help-backup-btn{border:1px solid #B8DEE6;border-radius:10px;padding:10px 12px;background:white;color:var(--rt-dark-blue);font-size:12.5px;font-weight:800}
 .help-backup-btn:hover{background:#F2FAFB;border-color:var(--rt-sky-blue)}
+/* Clear all progress: full width under Export / Import, in the danger red,
+   so a backup is the obvious first step. */
+.help-clear-progress-btn{grid-column:1/-1;color:var(--rt-red);border-color:rgba(212,69,38,.35)}
+.help-clear-progress-btn:hover{background:#FFF2EE;border-color:var(--rt-red)}
 .help-backup-status[hidden]{display:none}
 .help-backup-status{margin-top:9px;padding:9px 11px;border:1px solid #CBE7EC;border-radius:10px;background:#EAF6F8;color:var(--rt-dark-blue);font-size:12px;font-weight:700;line-height:1.4}
 .help-backup-status.is-error{border-color:#F3C5B8;background:#FFF2EE;color:#9D351D}

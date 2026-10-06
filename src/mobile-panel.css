@@ -25,7 +25,6 @@
   .map-wrap{position:absolute;inset:0;width:100%;height:100%}
   #map{position:absolute;inset:0;width:100%;height:100%}
   .map-actions{top:84px;right:14px;bottom:auto;gap:8px;flex-direction:column;align-items:center}
-  .map-actions .danger{display:none}
   #homeBtn,#locateBtn,#helpBtn,#feedbackBtn{width:44px;height:44px;padding:0;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;background:rgba(255,255,255,.97)}
   #homeBtn svg,#locateBtn svg,#helpBtn svg,#feedbackBtn svg{display:block;width:24px;height:24px;flex:0 0 auto}
   #homeBtn span,#locateBtn span,#helpBtn span,#feedbackBtn span{display:none}

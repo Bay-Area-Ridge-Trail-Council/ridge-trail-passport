@@ -298,3 +298,20 @@ test("index.html keeps the beta out of search results and matches the beta notic
   assert.ok(!html.includes(CONFIG.feedbackFormUrl));
   assert.match(CONFIG.feedbackFormUrl, /^https:\/\/docs\.google\.com\/forms\//);
 });
+
+test("Clear all progress lives with the backup actions, not among the map controls", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const html = await readFile(new URL("../index.html", import.meta.url), "utf8");
+
+  const between = (start, end) => {
+    const from = html.indexOf(start);
+    return from === -1 ? "" : html.slice(from, html.indexOf(end, from));
+  };
+  const mapControls = between('<div class="map-actions">', '<div class="legend"');
+  const backupActions = between('<div class="help-backup-actions">', "</div>");
+
+  assert.ok(mapControls.length > 0 && backupActions.length > 0);
+  assert.ok(!mapControls.includes('id="resetBtn"'), "Reset must not be in the map controls");
+  assert.match(backupActions, /id="resetBtn"[^>]*>Clear all progress</);
+  assert.ok(backupActions.includes('id="exportProgressBtn"'));
+});
