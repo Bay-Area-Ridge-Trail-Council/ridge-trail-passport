@@ -462,6 +462,7 @@ async function initialize() {
     onSelect: selectFeature,
     onToggleComplete: toggleComplete,
     onFiltersChange: handleFiltersChange,
+    onSearchInput: () => ui.renderList(features, selectedObjectId),
     onCloseDetails: clearSelection,
     onHome: goHome,
     onReset: resetProgress,
