@@ -5,9 +5,27 @@ updates:
     schedule:
       interval: monthly
     open-pull-requests-limit: 5
+    # Wait 7 days after a new version is published before proposing it.
+    # Security fixes are not delayed by this.
+    cooldown:
+      default-days: 7
+    # Bundle all npm updates into one pull request per month.
+    groups:
+      npm-packages:
+        patterns:
+          - "*"
 
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: monthly
     open-pull-requests-limit: 5
+    # Wait 7 days after a new version is published before proposing it.
+    # Security fixes are not delayed by this.
+    cooldown:
+      default-days: 7
+    # Bundle all workflow step updates into one pull request per month.
+    groups:
+      github-actions:
+        patterns:
+          - "*"
