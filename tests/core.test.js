@@ -315,3 +315,19 @@ test("Clear all progress lives with the backup actions, not among the map contro
   assert.match(backupActions, /id="resetBtn"[^>]*>Clear all progress</);
   assert.ok(backupActions.includes('id="exportProgressBtn"'));
 });
+
+test("status messages show in front of the Help panel but behind the beta notice", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const css = (await Promise.all(
+    ["styles.css", "help.css"].map((name) => readFile(new URL(`../src/${name}`, import.meta.url), "utf8"))
+  )).join("\n");
+  const zIndexOf = (selector) => {
+    const rule = css.match(new RegExp(`(^|\\n)${selector.replace(".", "\\.")}\\{[^}]*z-index:(\\d+)`));
+    assert.ok(rule, `no z-index found for ${selector}`);
+    return Number(rule[2]);
+  };
+
+  // "Progress reset." appears while Help is open (Clear all progress lives there).
+  assert.ok(zIndexOf(".status") > zIndexOf(".help-backdrop"));
+  assert.ok(zIndexOf(".status") < zIndexOf(".beta-notice-backdrop"));
+});
