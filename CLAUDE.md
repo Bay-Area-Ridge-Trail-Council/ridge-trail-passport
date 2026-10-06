@@ -41,16 +41,17 @@ asking:
 - **No server, no database, no API keys, no secrets.** This is a static site on
   GitHub Pages. The absence of any backend is what makes it maintainable by a
   small nonprofit. Do not introduce one.
-- **Leaflet is intentionally the only runtime dependency.** Do not add npm
-  packages. Ask first, with a reason, if you believe one is genuinely needed.
+- **MapLibre GL JS is intentionally the only runtime dependency.** Do not add
+  npm packages. Ask first, with a reason, if you believe one is genuinely
+  needed.
 - **Trail data is read live from the public ArcGIS feature layer.** The app does
   not keep a second copy of the route geometry. GIS edits must appear without a
   redeploy.
-- **The basemap stays swappable.** All basemap settings live in a single object
-  in `src/config.js`. Keep it that way — a migration to MapLibre and a different
-  tile source is planned.
-- **`src/map.js` is the only file that should use Leaflet directly.** `src/ui.js`
-  currently uses it in one small place; do not spread it further.
+- **The basemap stays swappable.** All basemap settings live in the single
+  `basemap` object in `src/config.js` (currently the OpenFreeMap Liberty vector
+  style). Changing tile provider must stay a one-line edit there.
+- **`src/map.js` is the only file that should use MapLibre directly.** No other
+  file imports it; keep it that way.
 
 ## User data rules — treat these as hard requirements
 
@@ -80,8 +81,10 @@ any server. If this app loses someone's data, it is gone permanently.
 - `src/data.js` requests only the fields listed in `CONFIG.featureFields`. Keep
   the list minimal.
 - `public/sw.js` deliberately caches same-origin files only. It must not cache
-  OpenStreetMap tiles or ArcGIS responses — that would violate the tile usage
-  policy.
+  basemap tiles (OpenFreeMap) or ArcGIS responses — that would violate the tile
+  usage policy. It does cache same-origin files the app's scripts load by
+  themselves, such as MapLibre's background worker; without that, the trail
+  cannot be drawn offline.
 - Accessibility attributes (`aria-pressed`, `aria-expanded`,
   `role="progressbar"`, keyboard handlers, focus management,
   `prefers-reduced-motion`) are intentional. Preserve them in any markup change.
