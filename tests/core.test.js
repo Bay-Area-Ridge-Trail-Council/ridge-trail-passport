@@ -358,3 +358,16 @@ test("section detail panel labels the Ridge Trail link as Details", async () => 
   assert.ok(ui.includes('["Partner_Website", "Partner Website ↗"]'));
   assert.ok(ui.includes('["AllTrails_Link", "AllTrails ↗"]'));
 });
+
+test("beta notice emphasises its three key statements with <strong>", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const html = await readFile(new URL("../index.html", import.meta.url), "utf8");
+  const notice = html.slice(html.indexOf('id="betaNoticeText"'), html.indexOf('class="beta-notice-check"'));
+
+  assert.ok(notice.includes("<p><strong>It's a test version.</strong> Things may break, and your progress is saved only on this device.</p>"));
+  assert.ok(notice.includes("<p><strong>It's not a navigation tool.</strong> Conditions, closures, and access change, and some sections need permission. Check with the land manager before you go.</p>"));
+  assert.ok(notice.includes("<p><strong>This link is just for beta testers for now.</strong></p>"));
+  // The intro paragraph stays plain.
+  assert.ok(notice.includes("<p>Explore the Ridge Trail"));
+  assert.equal((notice.match(/<strong>/g) || []).length, 3);
+});
