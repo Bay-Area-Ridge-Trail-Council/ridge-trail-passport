@@ -7,8 +7,8 @@ The Passport reads the authoritative public Ridge Trail route directly from ArcG
 ## Architecture
 
 - **Frontend:** Vite + plain JavaScript
-- **Mapping:** Leaflet
-- **Basemap:** OpenStreetMap Standard
+- **Mapping:** MapLibre GL JS
+- **Basemap:** OpenFreeMap Liberty vector style
 - **Trail data:** public ArcGIS Online Feature Layer
 - **Persistent trail identity:** permanent `Segment_ID`
 - **Completion storage:** browser `localStorage`
@@ -62,13 +62,13 @@ The Vite build uses relative asset paths so the project works at the repository 
 
 - No user accounts or automatic cross-device sync
 - No offline basemap support
-- OpenStreetMap Standard public tiles are for normal interactive viewing only; bulk/offline tile downloading should not be added
+- The public OpenFreeMap tiles are for normal interactive viewing only; bulk/offline tile downloading should not be added
 - No dedicated client-side error-monitoring service
 - Install-to-home-screen/PWA support remains basic
 
 ## Dependencies
 
-The production JavaScript dependency footprint is intentionally small: Leaflet is the only runtime package.
+The production JavaScript dependency footprint is intentionally small: MapLibre GL JS is the only runtime package.
 
 Dependabot checks npm and GitHub Actions dependencies monthly and proposes updates through pull requests.
 

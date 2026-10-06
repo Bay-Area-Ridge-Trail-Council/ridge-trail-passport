@@ -28,17 +28,23 @@ export const CONFIG = {
 
   requestTimeoutMs: 15000,
 
+  // The basemap is a MapLibre vector style. Changing tile provider means
+  // changing styleUrl here and nowhere else. The style supplies its own
+  // attribution (OpenFreeMap, OpenMapTiles, OpenStreetMap), which MapLibre
+  // shows in the bottom-right corner of the map.
   basemap: {
-    name: "OpenStreetMap",
-    url: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
-    maxZoom: 19,
-    attribution:
-      '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors'
+    name: "OpenFreeMap Liberty",
+    styleUrl: "https://tiles.openfreemap.org/styles/liberty",
+    // MapLibre zoom levels are one lower than Leaflet's for the same scale,
+    // so 18 here matches the old Leaflet limit of 19.
+    maxZoom: 18
   },
 
+  // MapLibre expects [longitude, latitude] — the opposite of Leaflet.
+  // Zoom 8 in MapLibre shows the same area as zoom 9 did in Leaflet.
   initialMap: {
-    center: [37.8, -122.15],
-    zoom: 9
+    center: [-122.15, 37.8],
+    zoom: 8
   },
 
   colors: {

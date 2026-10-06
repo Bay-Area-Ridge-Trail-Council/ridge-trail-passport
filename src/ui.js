@@ -1,5 +1,3 @@
-import L from "leaflet";
-
 import { fetchFirstImageAttachment } from "./data.js";
 import {
   isCompletionEligible,
@@ -473,10 +471,23 @@ export function createUI({
   $("resetBtn").onclick = onReset;
   $("locateBtn").onclick = onLocate;
 
+  // Keep clicks, taps, and scrolling on the section list and detail sheet
+  // from also reaching the map underneath.
   for (const id of ["list", "sheet"]) {
     const element = $(id);
-    L.DomEvent.disableClickPropagation(element);
-    L.DomEvent.disableScrollPropagation(element);
+
+    for (const type of [
+      "click",
+      "dblclick",
+      "mousedown",
+      "contextmenu",
+      "touchstart",
+      "wheel"
+    ]) {
+      element.addEventListener(type, (event) => event.stopPropagation(), {
+        passive: true
+      });
+    }
   }
 
   return {
