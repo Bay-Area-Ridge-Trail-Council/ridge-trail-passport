@@ -331,3 +331,30 @@ test("status messages show in front of the Help panel but behind the beta notice
   assert.ok(zIndexOf(".status") > zIndexOf(".help-backdrop"));
   assert.ok(zIndexOf(".status") < zIndexOf(".beta-notice-backdrop"));
 });
+
+test("beta notice checkbox shows a focus ring for keyboard users only", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const read = (path) => readFile(new URL(path, import.meta.url), "utf8");
+  const [css, main] = await Promise.all([read("../src/help.css"), read("../src/main.js")]);
+
+  // The notice must not focus the checkbox when it opens; that is what made
+  // the ring appear before anyone touched it.
+  assert.ok(!/\bagree\.focus\(\)/.test(main));
+
+  // No ring on plain :focus (mouse/touch), a visible ring on :focus-visible,
+  // and a custom-drawn box so the ring lines up with it.
+  assert.match(css, /\.beta-notice-check input:focus\{outline:none\}/);
+  const visible = css.match(/\.beta-notice-check input:focus-visible\{([^}]*)\}/);
+  assert.ok(visible, "missing :focus-visible style");
+  assert.match(visible[1], /outline:\s*\d+px solid/);
+  assert.match(css, /\.beta-notice-check input\{[^}]*appearance:none/);
+});
+
+test("section detail panel labels the Ridge Trail link as Details", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const ui = await readFile(new URL("../src/ui.js", import.meta.url), "utf8");
+
+  assert.ok(ui.includes('["BRT_Website", "Details ↗"]'));
+  assert.ok(ui.includes('["Partner_Website", "Partner Website ↗"]'));
+  assert.ok(ui.includes('["AllTrails_Link", "AllTrails ↗"]'));
+});

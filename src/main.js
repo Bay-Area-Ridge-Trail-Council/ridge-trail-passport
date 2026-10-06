@@ -205,10 +205,11 @@ function initializeBetaNotice() {
   const root = document.documentElement;
   const app = $("app");
   const backdrop = $("betaNoticeBackdrop");
+  const panel = $("betaNoticePanel");
   const agree = $("betaNoticeAgree");
   const start = $("betaNoticeStart");
 
-  if (!backdrop || !agree || !start || isBetaNoticeAcknowledged()) {
+  if (!backdrop || !panel || !agree || !start || isBetaNoticeAcknowledged()) {
     root.classList.remove("beta-notice-pending");
     return;
   }
@@ -233,7 +234,10 @@ function initializeBetaNotice() {
     app.inert = false;
   });
 
-  agree.focus();
+  // Focus the dialog itself rather than the checkbox: screen readers announce
+  // the notice, the first Tab reaches the checkbox, and no focus ring shows
+  // before anyone has used the keyboard.
+  panel.focus();
 }
 
 // Feedback buttons only link to the form. Nothing is sent unless the visitor

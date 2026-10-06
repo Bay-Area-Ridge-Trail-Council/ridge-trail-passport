@@ -397,7 +397,7 @@ export function createUI({
     }
 
     for (const [field, label] of [
-      ["BRT_Website", "RidgeTrail.org ↗"],
+      ["BRT_Website", "Details ↗"],
       ["Partner_Website", "Partner Website ↗"],
       ["AllTrails_Link", "AllTrails ↗"]
     ]) {
