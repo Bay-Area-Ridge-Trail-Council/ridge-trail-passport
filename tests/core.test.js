@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { CONFIG } from "../src/config.js";
-import { uniqueValues, validateSegmentIds } from "../src/data.js";
+import { fetchTrailFeatures, uniqueValues, validateSegmentIds } from "../src/data.js";
 import { createProgressStore } from "../src/progress.js";
 import {
   getFeatureEndpoints,
@@ -232,4 +232,20 @@ test("debounce runs once after a pause and can be cancelled", (t) => {
   debounced.cancel();
   t.mock.timers.tick(500);
   assert.deepEqual(calls, ["rid"]);
+});
+
+test("trail query asks ArcGIS for coordinates rounded to the configured precision", async (t) => {
+  const requested = [];
+  t.mock.method(globalThis, "fetch", async (url) => {
+    requested.push(new URL(url));
+    return { ok: true, json: async () => ({ type: "FeatureCollection", features: [] }) };
+  });
+  globalThis.window ??= globalThis;
+
+  await fetchTrailFeatures();
+
+  assert.equal(CONFIG.geometryPrecision, 6);
+  assert.equal(requested.length, 1);
+  assert.equal(requested[0].searchParams.get("geometryPrecision"), "6");
+  assert.equal(requested[0].searchParams.get("outSR"), "4326");
 });

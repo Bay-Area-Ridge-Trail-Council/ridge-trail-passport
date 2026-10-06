@@ -8,6 +8,7 @@ function buildQueryUrl() {
     outFields: CONFIG.featureFields.join(","),
     returnGeometry: "true",
     outSR: "4326",
+    geometryPrecision: String(CONFIG.geometryPrecision),
     f: "geojson"
   });
 

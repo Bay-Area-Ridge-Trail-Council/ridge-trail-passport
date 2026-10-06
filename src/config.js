@@ -26,6 +26,13 @@ export const CONFIG = {
     "Camping"
   ],
 
+  // Decimal places ArcGIS keeps in each trail coordinate. The service sends
+  // 12 by default, far more than a map can show; fewer digits make the
+  // download smaller. 6 decimals is about 10 cm here — under half a pixel
+  // even at the map's maximum zoom. 5 (about 1 m) was tested and made
+  // curves visibly step-shaped at maximum zoom, so do not go lower than 6.
+  geometryPrecision: 6,
+
   requestTimeoutMs: 15000,
 
   // The basemap is a MapLibre vector style. Changing tile provider means
