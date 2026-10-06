@@ -43,3 +43,17 @@
   .help-intro{margin-bottom:16px}
   .help-install-grid,.help-backup-actions,.help-companion-grid,.help-resource-grid{grid-template-columns:1fr}
 }
+
+/* First-run beta notice: reuses the Help panel styles above, but covers the
+   whole page (sidebar included) and sits above everything else. */
+.beta-notice-backdrop{position:fixed;z-index:2000}
+/* Set by the small script in index.html before the page first appears. */
+.beta-notice-pending .beta-notice-backdrop[hidden]{display:flex}
+.beta-notice-panel{width:min(520px,100%)}
+.beta-notice-panel h2{margin-right:0}
+.beta-notice-panel p{margin:0 0 11px;font-size:14px;line-height:1.5;color:#385669}
+.inline-help-icon{width:1em;height:1em;vertical-align:middle}
+.beta-notice-check{display:flex;gap:10px;align-items:flex-start;margin:16px 0;padding:12px;border:1px solid var(--line);border-radius:12px;background:#FAFCFD;font-size:13.5px;line-height:1.45;color:var(--ink);cursor:pointer}
+.beta-notice-check input{flex:0 0 auto;width:20px;height:20px;margin:1px 0 0;accent-color:var(--done)}
+.beta-notice-start{width:100%;padding:12px;font-size:15px}
+.beta-notice-start:disabled{opacity:.45;cursor:not-allowed}
