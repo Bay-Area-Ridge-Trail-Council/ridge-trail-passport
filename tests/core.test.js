@@ -12,6 +12,7 @@ import {
   milesFor,
   trailTypeLabel
 } from "../src/trails.js";
+import { coveredEdges, panOffset } from "../src/panel-offset.js";
 import { debounce, normalizeUrl } from "../src/utils.js";
 
 class MemoryStorage {
@@ -422,4 +423,59 @@ test("desktop map controls: buttons stacked top right, key above attribution, sc
 
   // Zoom gets the same 14px corner margin as the other controls.
   assert.match(desktopRules, /\.maplibregl-ctrl-top-left \.maplibregl-ctrl\{margin:14px 0 0 14px\}/);
+});
+
+// Screen boxes measured from a 390x844 phone and a 1024x768 desktop window.
+const box = (left, top, right, bottom) => ({ left, top, right, bottom });
+
+test("detail panel: phone sheet covers the bottom, desktop card covers the left", () => {
+  // Phone: map fills the screen, header floats over the top, sheet over the bottom.
+  assert.deepEqual(
+    coveredEdges(box(0, 0, 390, 844), box(10, 412, 380, 834), box(10, 10, 380, 74)),
+    { top: 74, right: 0, bottom: 432, left: 0 }
+  );
+
+  // Desktop: map starts right of the sidebar; the card sits over its left side.
+  // The sidebar is beside the map, so it covers nothing.
+  assert.deepEqual(
+    coveredEdges(box(360, 0, 1024, 768), box(378, 284, 808, 750), box(0, 0, 360, 768)),
+    { top: 0, right: 0, bottom: 0, left: 448 }
+  );
+
+  // Phone held sideways: only a thin band is left above the sheet, still used.
+  assert.deepEqual(
+    coveredEdges(box(0, 0, 667, 375), box(10, 177, 657, 365), box(10, 10, 657, 74)),
+    { top: 74, right: 0, bottom: 198, left: 0 }
+  );
+
+  // Panel closed, or covering so much there is nowhere useful to move to.
+  assert.equal(coveredEdges(box(0, 0, 390, 844), null, box(10, 10, 380, 74)), null);
+  assert.equal(coveredEdges(box(360, 0, 844, 390), box(378, 18, 808, 372), box(0, 0, 360, 390)), null);
+});
+
+test("detail panel: a section is moved only when it is not fully visible, and centred in the clear area", () => {
+  const covered = { top: 0, right: 0, bottom: 0, left: 448 }; // desktop, map 664x768
+
+  // Already fully in the clear strip: no movement.
+  assert.equal(panOffset(box(500, 300, 600, 400), 664, 768, covered), null);
+
+  // Partly under the card: centred in the strip (x 456..656, y 8..760).
+  assert.deepEqual(panOffset(box(300, 300, 500, 400), 664, 768, covered), [400 - 556, 350 - 384]);
+
+  // Bigger than the clear area: still centred, never zoomed.
+  assert.deepEqual(panOffset(box(0, -500, 1000, 1500), 664, 768, covered), [500 - 556, 500 - 384]);
+});
+
+test("selecting a section on the map pans without zooming; the list still frames it", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const read = (path) => readFile(new URL(path, import.meta.url), "utf8");
+  const [main, map] = await Promise.all([read("../src/main.js"), read("../src/map.js")]);
+
+  // Re-selecting the same section does not move the map.
+  assert.match(main, /\} else if \(!alreadySelected\) \{\s*ridgeMap\.panIntoView\(feature, covered\);/);
+
+  // The pan keeps the zoom, is short, and is instant with reduced motion.
+  const pan = map.slice(map.indexOf("function panIntoView"), map.indexOf("function featureScreenBox"));
+  assert.match(pan, /map\.panBy\(offset, \{\s*duration: PAN_DURATION_MS,\s*animate: !prefersReducedMotion/);
+  assert.ok(!/fitBounds|zoom/i.test(pan.replace(/the zoom/g, "")), "panIntoView must not change zoom");
 });

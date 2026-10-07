@@ -14,6 +14,7 @@ import {
   getFeatureEndpoints,
   isCompletionEligible
 } from "./trails.js";
+import { panOffset } from "./panel-offset.js";
 
 // MapLibre does its tile work in a background worker. Vite bundles that
 // worker as its own file; this tells MapLibre where to find it.
@@ -24,6 +25,10 @@ setWorkerUrl(maplibreWorkerUrl);
 // The zoom numbers below are the old Leaflet values minus one.
 const FIT_MAX_ZOOM = 12;
 const LOCATE_ZOOM = 11;
+
+// How long the map takes to slide a clicked section out from under the
+// detail panel. Short, so it reads as the map making room.
+const PAN_DURATION_MS = 350;
 
 // How far (in screen pixels) from a trail line a click or tap still counts
 // as hitting it. On touch screens this replaces the old invisible 18px-wide
@@ -476,14 +481,62 @@ export function createRidgeMap({ onSelect, onBlankMapClick, isDone }) {
     refreshMapSize();
   }
 
-  function fitToFeature(feature) {
+  // Used when a section is picked from the list: zooms to frame it.
+  // `covered` is how much of each map edge the detail panel covers (see
+  // panel-offset.js); the section is framed in the part left uncovered.
+  // Without it, the section is framed in the whole map as before.
+  function fitToFeature(feature, covered) {
     const bounds = featureBounds(feature);
     if (!bounds) return;
 
     map.fitBounds(bounds, {
       maxZoom: FIT_MAX_ZOOM,
+      padding: covered || 0,
       animate: !prefersReducedMotion
     });
+  }
+
+  // Used when a section is clicked on the map: slides the map, without
+  // changing the zoom, so the section sits centred in the part the detail
+  // panel leaves uncovered. Does nothing if it is already fully visible there.
+  function panIntoView(feature, covered) {
+    if (!covered) return;
+
+    const box = featureScreenBox(feature);
+    if (!box) return;
+
+    const container = map.getContainer();
+    const offset = panOffset(
+      box,
+      container.clientWidth,
+      container.clientHeight,
+      covered
+    );
+    if (!offset) return;
+
+    map.panBy(offset, {
+      duration: PAN_DURATION_MS,
+      animate: !prefersReducedMotion
+    });
+  }
+
+  // The section's extent on screen, in pixels from the map's top-left corner.
+  function featureScreenBox(feature) {
+    const box = { left: Infinity, top: Infinity, right: -Infinity, bottom: -Infinity };
+
+    for (const line of featureLines(feature)) {
+      for (const coordinate of line || []) {
+        if (!Array.isArray(coordinate) || coordinate.length < 2) continue;
+
+        const point = map.project([coordinate[0], coordinate[1]]);
+        box.left = Math.min(box.left, point.x);
+        box.top = Math.min(box.top, point.y);
+        box.right = Math.max(box.right, point.x);
+        box.bottom = Math.max(box.bottom, point.y);
+      }
+    }
+
+    return box.left === Infinity ? null : box;
   }
 
   function locate({ onError } = {}) {
@@ -527,6 +580,7 @@ export function createRidgeMap({ onSelect, onBlankMapClick, isDone }) {
     render,
     resetView,
     fitToFeature,
+    panIntoView,
     locate
   };
 }
@@ -544,6 +598,7 @@ function createUnavailableMap() {
     render() {},
     resetView() {},
     fitToFeature() {},
+    panIntoView() {},
     locate({ onError } = {}) {
       onError?.("The map isn't available in this browser.");
     }
@@ -562,19 +617,9 @@ function sameFeatures(a, b) {
 // The feature's bounding box, padded by 25% on each side like Leaflet's
 // bounds.pad(0.25).
 function featureBounds(feature) {
-  const geometry = feature?.geometry;
-  if (!geometry) return null;
-
-  const lines =
-    geometry.type === "LineString"
-      ? [geometry.coordinates]
-      : geometry.type === "MultiLineString"
-        ? geometry.coordinates
-        : [];
-
   const bounds = new LngLatBounds();
 
-  for (const line of lines) {
+  for (const line of featureLines(feature)) {
     for (const coordinate of line || []) {
       if (Array.isArray(coordinate) && coordinate.length >= 2) {
         bounds.extend([coordinate[0], coordinate[1]]);
@@ -595,4 +640,13 @@ function featureBounds(feature) {
     [west - padLng, south - padLat],
     [east + padLng, north + padLat]
   );
+}
+
+// The feature's lines as lists of [longitude, latitude] points.
+function featureLines(feature) {
+  const geometry = feature?.geometry;
+
+  if (geometry?.type === "LineString") return [geometry.coordinates];
+  if (geometry?.type === "MultiLineString") return geometry.coordinates || [];
+  return [];
 }
