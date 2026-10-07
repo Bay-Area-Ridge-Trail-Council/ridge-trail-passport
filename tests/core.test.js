@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { CONFIG } from "../src/config.js";
 import { acknowledgeBetaNotice, isBetaNoticeAcknowledged } from "../src/beta-notice.js";
 import { fetchTrailFeatures, uniqueValues, validateSegmentIds } from "../src/data.js";
-import { createProgressStore } from "../src/progress.js";
+import { createProgressStore, ProgressNotSavedError } from "../src/progress.js";
 import {
   getFeatureEndpoints,
   isCompletionEligible,
@@ -20,6 +20,11 @@ class MemoryStorage {
   getItem(key) { return this.values.has(key) ? this.values.get(key) : null; }
   setItem(key, value) { this.values.set(key, String(value)); }
   removeItem(key) { this.values.delete(key); }
+}
+
+// Storage that can read but refuses to save, like a full or blocked browser.
+class FailingStorage extends MemoryStorage {
+  setItem() { throw new Error("QuotaExceededError"); }
 }
 
 function makeFeature(properties = {}, geometry = null) {
@@ -478,4 +483,58 @@ test("selecting a section on the map pans without zooming; the list still frames
   const pan = map.slice(map.indexOf("function panIntoView"), map.indexOf("function featureScreenBox"));
   assert.match(pan, /map\.panBy\(offset, \{\s*duration: PAN_DURATION_MS,\s*animate: !prefersReducedMotion/);
   assert.ok(!/fitBounds|zoom/i.test(pan.replace(/the zoom/g, "")), "panIntoView must not change zoom");
+});
+
+test("a failed save does not mark a section complete or change the totals", () => {
+  const store = createProgressStore({ storage: new FailingStorage() });
+  const section = { Trail_Type: "Primary", Segment_ID: "SEG-001", OBJECTID: 10, Calculated_Mileage: 4.2 };
+  const features = [makeFeature(section)];
+  const before = store.stats(features);
+
+  assert.throws(() => store.toggle(section), ProgressNotSavedError);
+  assert.equal(store.isDone(section), false);
+  assert.deepEqual(store.stats(features), before);
+  assert.equal(store.exportData().completed.length, 0);
+});
+
+test("a failed save does not un-mark a completed section", () => {
+  const storage = new MemoryStorage();
+  const section = { Trail_Type: "Primary", Segment_ID: "SEG-001", OBJECTID: 10, Calculated_Mileage: 4.2 };
+  const features = [makeFeature(section)];
+  createProgressStore({ storage }).toggle(section);
+  const saved = storage.getItem(CONFIG.storageKey);
+
+  // Same saved data, but now the browser refuses to save.
+  const failing = new FailingStorage();
+  failing.values.set(CONFIG.storageKey, saved);
+  const store = createProgressStore({ storage: failing });
+  const before = store.stats(features);
+  const backupBefore = store.exportData().completed;
+
+  assert.throws(() => store.toggle(section), ProgressNotSavedError);
+  assert.equal(store.isDone(section), true);
+  assert.deepEqual(store.stats(features), before);
+  // The original completion date is kept, not replaced.
+  assert.deepEqual(store.exportData().completed, backupBefore);
+  assert.equal(failing.getItem(CONFIG.storageKey), saved);
+});
+
+test("with no storage available at all, completions are not kept in memory", () => {
+  const store = createProgressStore({ storage: null });
+  const section = { Trail_Type: "Primary", Segment_ID: "SEG-001", OBJECTID: 10 };
+
+  assert.throws(() => store.toggle(section), ProgressNotSavedError);
+  assert.equal(store.isDone(section), false);
+});
+
+test("a failed save tells the visitor, in both directions", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const main = await readFile(new URL("../src/main.js", import.meta.url), "utf8");
+  const handler = main.slice(main.indexOf("function toggleComplete"), main.indexOf("function handleFiltersChange"));
+
+  assert.match(handler, /catch \(error\) \{\s*if \(!\(error instanceof ProgressNotSavedError\)\) throw error;/);
+  assert.ok(handler.includes("Couldn't save — this section wasn't marked complete. Your browser may be blocking storage or out of space."));
+  assert.ok(handler.includes("Couldn't save — this section is still marked complete. Your browser may be blocking storage or out of space."));
+  // Shown through the status message, which screen readers announce.
+  assert.match(handler, /ui\.showStatus\(\s*wasComplete/);
 });

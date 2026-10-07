@@ -12,7 +12,7 @@ import {
   sameTrailSnapshot,
   writeCachedTrailFeatures
 } from "./offline.js";
-import { createProgressStore } from "./progress.js";
+import { createProgressStore, ProgressNotSavedError } from "./progress.js";
 import { createUI } from "./ui.js";
 import { acknowledgeBetaNotice, isBetaNoticeAcknowledged } from "./beta-notice.js";
 import { CONFIG } from "./config.js";
@@ -101,7 +101,24 @@ function toggleComplete(feature, { keepDetailsOpen = false } = {}) {
     return;
   }
 
-  const nowComplete = progressStore.toggle(properties);
+  const wasComplete = progressStore.isDone(properties);
+  let nowComplete;
+
+  try {
+    nowComplete = progressStore.toggle(properties);
+  } catch (error) {
+    if (!(error instanceof ProgressNotSavedError)) throw error;
+
+    // Nothing changed in saved progress; redraw so the screen matches it.
+    renderAll();
+    ui.showStatus(
+      wasComplete
+        ? "Couldn't save — this section is still marked complete. Your browser may be blocking storage or out of space."
+        : "Couldn't save — this section wasn't marked complete. Your browser may be blocking storage or out of space.",
+      6000
+    );
+    return;
+  }
 
   if (nowComplete == null) {
     ui.showStatus(
