@@ -85,6 +85,14 @@ any server. If this app loses someone's data, it is gone permanently.
   usage policy. It does cache same-origin files the app's scripts load by
   themselves, such as MapLibre's background worker; without that, the trail
   cannot be drawn offline.
+- `public/sw.js` is not exactly what ships: `npm run build` fills in the list
+  of that build's hashed files (`assets/name-XXXXXXXX.js|css`) in `dist/sw.js`
+  (see `vite.config.js`). Each deploy therefore installs a new service worker,
+  which caches the new build's files and then deletes the previous build's
+  cache, so the cache stays one build's worth and does not grow. Hashed files
+  are served from the cache with no network request; the page and every
+  stable-named file (logo, manifest, icons) stay network-first so updates
+  reach existing visitors. In `npm run dev` the list is empty.
 - Accessibility attributes (`aria-pressed`, `aria-expanded`,
   `role="progressbar"`, keyboard handlers, focus management,
   `prefers-reduced-motion`) are intentional. Preserve them in any markup change.

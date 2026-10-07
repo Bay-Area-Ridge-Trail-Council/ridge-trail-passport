@@ -646,3 +646,32 @@ test("a failed clear tells the visitor what happened and what to do", async () =
   // "Progress reset." only after a successful clear.
   assert.ok(handler.indexOf("return;\n  }\n\n  selectedObjectId = null;") < handler.indexOf('ui.showStatus("Progress reset.")'));
 });
+
+test("service worker: hashed files are cache-first, the list is only filled in at build time", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const read = (path) => readFile(new URL(path, import.meta.url), "utf8");
+  const [sw, viteConfig] = await Promise.all([read("../public/sw.js"), read("../vite.config.js")]);
+
+  // As committed (and in `npm run dev`), the list is empty: nothing extra is
+  // cached and no list from an earlier build can linger.
+  assert.match(sw, /const BUILD_ID = \/\* build:id \*\/ "dev" \/\* end \*\/;/);
+  assert.match(sw, /const BUILD_ASSETS = \/\* build:assets \*\/ \[\] \/\* end \*\/;/);
+  assert.match(sw, /^\/\/ NOTE: THIS FILE IS NOT EXACTLY WHAT SHIPS\./);
+
+  // The hashed-file pattern matches Vite's output and nothing with a stable name.
+  const swPattern = new RegExp(sw.match(/const HASHED_ASSET = \/(.+)\/;/)[1]);
+  for (const path of ["/assets/index-D-uGn5bA.css", "/assets/index-DvNcw7dq.js", "/assets/maplibre-gl-worker-MfjJLauD.js"]) {
+    assert.ok(swPattern.test(path), `${path} should be cache-first`);
+  }
+  for (const path of ["/", "/index.html", "/sw.js", "/ridge-trail-logo.png", "/manifest.webmanifest",
+    "/ridge-trail-app-icon-192.png", "/src/main.js", "/assets/logo.png"]) {
+    assert.ok(!swPattern.test(path), `${path} must stay network-first`);
+  }
+
+  // The build step uses the same pattern (without the leading slash).
+  const buildPattern = viteConfig.match(/const HASHED_ASSET = \/\^(.+)\/;/)[1];
+  assert.equal("\\/" + buildPattern, swPattern.source);
+
+  // Other sites (tiles, basemap style, ArcGIS, photos) are still never touched.
+  assert.ok(sw.includes("if (url.origin !== self.location.origin) return;"));
+});
