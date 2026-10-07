@@ -3,6 +3,7 @@ import {
   Map as MapLibreMap,
   Marker,
   NavigationControl,
+  ScaleControl,
   setWorkerUrl
 } from "maplibre-gl";
 import maplibreWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
@@ -102,6 +103,27 @@ export function createRidgeMap({ onSelect, onBlankMapClick, isDone }) {
   map.touchZoomRotate.disableRotation();
   map.keyboard.disableRotation();
   map.addControl(new NavigationControl({ showCompass: false }), "top-left");
+  // Scale bar in miles, since the app reports progress in miles. Hidden on
+  // phones (see mobile-panel.css).
+  map.addControl(new ScaleControl({ unit: "imperial" }), "bottom-left");
+
+  // The map key (in index.html) is handed to MapLibre as a bottom-right
+  // control. MapLibre stacks bottom controls upward, so the key always sits
+  // just above the attribution and moves up if the attribution wraps onto
+  // two lines. It is hidden on phones (see mobile-panel.css).
+  const legend = document.querySelector(".legend");
+  if (legend) {
+    map.addControl(
+      {
+        onAdd() {
+          legend.classList.add("maplibregl-ctrl");
+          return legend;
+        },
+        onRemove() {}
+      },
+      "bottom-right"
+    );
+  }
 
   // --- Keeping the map sized to its container -----------------------------
 

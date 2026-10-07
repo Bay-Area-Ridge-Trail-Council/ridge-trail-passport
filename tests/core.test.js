@@ -396,3 +396,30 @@ test("beta notice checkbox lines up with the first line of its label", async () 
   assert.match(box, /width:24px;height:24px/);
   assert.match(box, /margin-top:calc\(\(1\.45em - 24px\) \/ 2\)/);
 });
+
+test("desktop map controls: buttons stacked top right, key above attribution, scale bar in miles", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const read = (path) => readFile(new URL(path, import.meta.url), "utf8");
+  const [map, desktop, mobile] = await Promise.all([
+    read("../src/map.js"),
+    read("../src/desktop.css"),
+    read("../src/mobile-panel.css")
+  ]);
+  const desktopRules = desktop.slice(desktop.indexOf("@media (min-width:801px){"));
+
+  // Scale bar: MapLibre's own, in miles, bottom left; hidden on phones.
+  assert.match(map, /new ScaleControl\(\{ unit: "imperial" \}\), "bottom-left"/);
+  assert.match(mobile, /\.maplibregl-ctrl-scale\{display:none\}/);
+
+  // The map key is handed to MapLibre in the bottom-right corner, where it
+  // stacks above the attribution instead of being placed with CSS.
+  assert.match(map, /return legend;\s*\},\s*onRemove\(\) \{\}\s*\},\s*"bottom-right"/);
+
+  // The four round buttons form a vertical stack at the top right.
+  const actions = desktopRules.match(/\.map-wrap \.map-actions\{([^}]*)\}/)[1];
+  assert.match(actions, /top:14px;right:14px;bottom:auto/);
+  assert.match(actions, /flex-direction:column/);
+
+  // Zoom gets the same 14px corner margin as the other controls.
+  assert.match(desktopRules, /\.maplibregl-ctrl-top-left \.maplibregl-ctrl\{margin:14px 0 0 14px\}/);
+});
