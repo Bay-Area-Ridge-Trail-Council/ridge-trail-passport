@@ -27,6 +27,11 @@ class FailingStorage extends MemoryStorage {
   setItem() { throw new Error("QuotaExceededError"); }
 }
 
+// Storage that saves normally but refuses to delete, so clearing fails.
+class FailingClearStorage extends MemoryStorage {
+  removeItem() { throw new Error("SecurityError"); }
+}
+
 function makeFeature(properties = {}, geometry = null) {
   return { type: "Feature", properties, geometry };
 }
@@ -537,4 +542,49 @@ test("a failed save tells the visitor, in both directions", async () => {
   assert.ok(handler.includes("Couldn't save — this section is still marked complete. Your browser may be blocking storage or out of space."));
   // Shown through the status message, which screen readers announce.
   assert.match(handler, /ui\.showStatus\(\s*wasComplete/);
+});
+
+test("a failed clear keeps every completion, on screen and in storage", () => {
+  const storage = new FailingClearStorage();
+  const store = createProgressStore({ storage });
+  const sections = [
+    { Trail_Type: "Primary", Segment_ID: "SEG-001", OBJECTID: 10, Calculated_Mileage: 4.2 },
+    { Trail_Type: "Primary", Segment_ID: "SEG-002", OBJECTID: 11, Calculated_Mileage: 6.5 },
+    { Trail_Type: "Primary", Segment_ID: "SEG-003", OBJECTID: 12, Calculated_Mileage: 2.0 }
+  ];
+  const features = sections.map((section) => makeFeature(section));
+  store.toggle(sections[0]);
+  store.toggle(sections[1]);
+
+  const statsBefore = store.stats(features);
+  const backupBefore = store.exportData().completed;
+  const savedBefore = storage.getItem(CONFIG.storageKey);
+
+  assert.throws(() => store.reset(), ProgressNotSavedError);
+
+  // What the screen draws from: the same completions, count and miles.
+  assert.equal(store.isDone(sections[0]), true);
+  assert.equal(store.isDone(sections[1]), true);
+  assert.equal(store.isDone(sections[2]), false);
+  assert.deepEqual(store.stats(features), statsBefore);
+  assert.deepEqual(store.exportData().completed, backupBefore);
+
+  // Still in storage, so reloading shows the same thing.
+  assert.equal(storage.getItem(CONFIG.storageKey), savedBefore);
+  const reloaded = createProgressStore({ storage });
+  assert.deepEqual(reloaded.stats(features), statsBefore);
+});
+
+test("a failed clear tells the visitor what happened and what to do", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const main = await readFile(new URL("../src/main.js", import.meta.url), "utf8");
+  const handler = main.slice(main.indexOf("function resetProgress"), main.indexOf("function initializeMobilePanelToggle"));
+
+  // The confirmation step is still there, before anything is cleared.
+  assert.ok(handler.indexOf("window.confirm(") < handler.indexOf("progressStore.reset()"));
+  assert.match(handler, /catch \(error\) \{\s*if \(!\(error instanceof ProgressNotSavedError\)\) throw error;/);
+  // Shown through the status message, which screen readers announce.
+  assert.ok(handler.includes('ui.showStatus(\n      "Couldn\'t clear progress — your completed sections are still saved. Try again. If it keeps happening, check that your browser isn\'t blocking storage for this site.",'));
+  // "Progress reset." only after a successful clear.
+  assert.ok(handler.indexOf("return;\n  }\n\n  selectedObjectId = null;") < handler.indexOf('ui.showStatus("Progress reset.")'));
 });
