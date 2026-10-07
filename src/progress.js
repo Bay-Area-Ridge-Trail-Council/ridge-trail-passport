@@ -5,6 +5,15 @@ const BACKUP_APP_NAME = "Ridge Trail Passport";
 const BACKUP_VERSION = 1;
 const STORAGE_KEY_PREFIX = "segment-";
 
+// Thrown by toggle() when the browser refuses to save. The change has
+// already been undone, so progress is exactly as it was before.
+export class ProgressNotSavedError extends Error {
+  constructor() {
+    super("Could not save Ridge Trail completion data.");
+    this.name = "ProgressNotSavedError";
+  }
+}
+
 function segmentIdFor(properties = {}) {
   return String(properties.Segment_ID || "").trim();
 }
@@ -86,7 +95,9 @@ export function createProgressStore({ storage = defaultStorage() } = {}) {
       const key = keyFor(properties);
       if (!key) return null;
 
-      if (progress[key]) {
+      const previous = progress[key];
+
+      if (previous) {
         delete progress[key];
       } else {
         progress[key] = {
@@ -94,7 +105,15 @@ export function createProgressStore({ storage = defaultStorage() } = {}) {
         };
       }
 
-      persist();
+      // If the save fails, undo the change so the app never shows a
+      // completion (or a removal) that isn't actually stored.
+      if (!persist()) {
+        if (previous) progress[key] = previous;
+        else delete progress[key];
+
+        throw new ProgressNotSavedError();
+      }
+
       return Boolean(progress[key]);
     },
 
