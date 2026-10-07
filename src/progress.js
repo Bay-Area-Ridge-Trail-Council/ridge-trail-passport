@@ -150,6 +150,7 @@ export function createProgressStore({ storage = defaultStorage() } = {}) {
       }
 
       let added = 0;
+      const addedKeys = [];
       let existing = 0;
       let skipped = 0;
       const seen = new Set();
@@ -174,10 +175,17 @@ export function createProgressStore({ storage = defaultStorage() } = {}) {
         progress[key] = {
           completedAt: completedAtFor(entry?.completedAt, fallbackCompletedAt)
         };
+        addedKeys.push(key);
         added += 1;
       }
 
       const saved = added === 0 || persist();
+
+      // If the save fails, take the new entries back out so the app never
+      // shows (or exports) completions that aren't actually stored.
+      if (!saved) {
+        for (const key of addedKeys) delete progress[key];
+      }
 
       return { added, existing, skipped, saved };
     },
