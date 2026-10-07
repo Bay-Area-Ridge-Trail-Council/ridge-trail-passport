@@ -51,13 +51,20 @@ function renderAll() {
 }
 
 function selectFeature(feature, { fit = false } = {}) {
+  const alreadySelected = feature.properties.OBJECTID === selectedObjectId;
   selectedObjectId = feature.properties.OBJECTID;
 
   renderAll();
   ui.scrollSelectedIntoView(selectedObjectId);
 
+  // Measured now that the detail panel is showing this section, so the map
+  // can keep the section out from under it.
+  const covered = ui.coveredMapEdges();
+
   if (fit) {
-    ridgeMap.fitToFeature(feature);
+    ridgeMap.fitToFeature(feature, covered);
+  } else if (!alreadySelected) {
+    ridgeMap.panIntoView(feature, covered);
   }
 }
 

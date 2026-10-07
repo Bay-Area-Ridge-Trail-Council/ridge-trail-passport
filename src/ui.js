@@ -6,6 +6,7 @@ import {
   milesFor,
   trailTypeLabel
 } from "./trails.js";
+import { coveredEdges } from "./panel-offset.js";
 import { $, debounce, escapeHtml, normalizeUrl } from "./utils.js";
 
 const SEARCH_DEBOUNCE_MS = 200;
@@ -449,6 +450,20 @@ export function createUI({
     });
   }
 
+  // How much of each map edge the open detail panel covers right now, in
+  // pixels. Measured from the page every time, so it follows screen size,
+  // orientation and text size.
+  function coveredMapEdges() {
+    const sheet = $("sheet");
+    const open = sheet.classList.contains("open");
+
+    return coveredEdges(
+      $("map").getBoundingClientRect(),
+      open ? sheet.getBoundingClientRect() : null,
+      document.querySelector("aside")?.getBoundingClientRect()
+    );
+  }
+
   // Rebuilding the map on every keystroke is slow on phones, so the search
   // box updates the list right away and waits for a pause in typing before
   // updating the map. The other filters still apply immediately.
@@ -497,6 +512,7 @@ export function createUI({
     renderProgress,
     renderList,
     renderDetails,
+    coveredMapEdges,
     renderLoadError,
     scrollSelectedIntoView
   };
