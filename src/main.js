@@ -165,7 +165,20 @@ function resetProgress() {
     return;
   }
 
-  progressStore.reset();
+  try {
+    progressStore.reset();
+  } catch (error) {
+    if (!(error instanceof ProgressNotSavedError)) throw error;
+
+    // Nothing was cleared; redraw so the screen matches saved progress.
+    renderAll();
+    ui.showStatus(
+      "Couldn't clear progress — your completed sections are still saved. Try again. If it keeps happening, check that your browser isn't blocking storage for this site.",
+      6000
+    );
+    return;
+  }
+
   selectedObjectId = null;
   renderAll();
   ui.showStatus("Progress reset.");
