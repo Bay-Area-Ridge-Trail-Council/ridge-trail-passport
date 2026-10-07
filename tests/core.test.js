@@ -216,6 +216,64 @@ test("progress import rejects invalid backups and skips duplicate route IDs", ()
   assert.equal(store.isDone({ Trail_Type: "Primary", Segment_ID: "SEG-OK" }), true);
 });
 
+
+test("a failed import save adds nothing, now or later", () => {
+  // A browser that refuses to save until saving is switched back on.
+  class SwitchableStorage extends MemoryStorage {
+    constructor() { super(); this.failSaves = false; }
+    setItem(key, value) {
+      if (this.failSaves) throw new Error("QuotaExceededError");
+      super.setItem(key, value);
+    }
+  }
+
+  const storage = new SwitchableStorage();
+  const store = createProgressStore({ storage });
+  const section = (id) => ({ Trail_Type: "Primary", Segment_ID: id, OBJECTID: id.length, Calculated_Mileage: 3 });
+  const features = ["SEG-001", "SEG-002", "SEG-003", "SEG-004"].map((id) => makeFeature(section(id)));
+  store.toggle(section("SEG-001"));
+
+  const statsBefore = store.stats(features);
+  const backupBefore = store.exportData().completed;
+  const savedBefore = storage.getItem(CONFIG.storageKey);
+
+  storage.failSaves = true;
+  const result = store.importData({
+    app: "Ridge Trail Passport",
+    version: 1,
+    completed: [{ segmentId: "SEG-001" }, { segmentId: "SEG-002" }, { segmentId: "SEG-003" }]
+  });
+
+  // Reported as not saved; nothing new shows, nothing existing is removed.
+  assert.equal(result.saved, false);
+  assert.equal(store.isDone(section("SEG-001")), true);
+  assert.equal(store.isDone(section("SEG-002")), false);
+  assert.equal(store.isDone(section("SEG-003")), false);
+  assert.deepEqual(store.stats(features), statsBefore);
+  assert.deepEqual(store.exportData().completed, backupBefore);
+  assert.equal(storage.getItem(CONFIG.storageKey), savedBefore);
+
+  // A later successful save does not quietly store the failed import.
+  storage.failSaves = false;
+  store.toggle(section("SEG-004"));
+  const reloaded = createProgressStore({ storage });
+  assert.deepEqual(
+    reloaded.exportData().completed.map((entry) => entry.segmentId),
+    ["SEG-001", "SEG-004"]
+  );
+});
+
+test("a failed import save tells the visitor nothing was imported", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const main = await readFile(new URL("../src/main.js", import.meta.url), "utf8");
+
+  assert.match(
+    main,
+    /if \(!result\.saved\) \{\s*throw new Error\(\s*"Couldn't save — nothing was imported\. Your browser may be blocking storage or out of space\."/
+  );
+  // Shown in the backup section's status message, which screen readers announce.
+  assert.match(main, /error\?\.message \|\| "Could not import that progress backup\.",\s*\{ isError: true \}/);
+});
 test("external links accept only http and https URLs", () => {
   assert.equal(normalizeUrl(" https://ridgetrail.org/path "), "https://ridgetrail.org/path");
   assert.equal(normalizeUrl("javascript:alert(1)"), null);

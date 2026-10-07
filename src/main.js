@@ -399,7 +399,9 @@ function initializeProgressBackup() {
       const result = progressStore.importData(data);
 
       if (!result.saved) {
-        throw new Error("Could not save imported progress on this device.");
+        throw new Error(
+          "Couldn't save — nothing was imported. Your browser may be blocking storage or out of space."
+        );
       }
 
       renderAll();
