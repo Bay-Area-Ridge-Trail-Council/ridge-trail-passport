@@ -1490,3 +1490,31 @@ test("map hint is dismissed by selecting a section, not by closing one", async (
   assert.match(ui, /\$\("mapHint"\)\.classList\.toggle\("hide", mapHintDismissed\);/);
   assert.ok(!/\$\("mapHint"\)\.classList\.remove\("hide"\)/.test(ui));
 });
+
+// A transition that does not name its properties animates all of them,
+// including visibility. On phones the Sections tab is hidden with
+// visibility, so section cards with such a transition stayed on screen over
+// the map for a moment after switching to the Map tab.
+test("every CSS transition names the properties it animates", async () => {
+  const { readdir, readFile } = await import("node:fs/promises");
+  const srcDir = new URL("../src/", import.meta.url);
+  const timingWords = /^(ease|ease-in|ease-out|ease-in-out|linear|step-start|step-end|steps\(|cubic-bezier\()/;
+  const problems = [];
+
+  for (const name of await readdir(srcDir)) {
+    if (!name.endsWith(".css")) continue;
+
+    const css = await readFile(new URL(name, srcDir), "utf8");
+
+    for (const match of css.matchAll(/transition(-property)?\s*:\s*([^;}]+)/g)) {
+      for (const part of match[2].split(",")) {
+        const first = part.trim().split(/\s+/)[0];
+        if (first === "all" || /^[\d.]/.test(first) || timingWords.test(first)) {
+          problems.push(`${name}: ${match[0].trim()}`);
+        }
+      }
+    }
+  }
+
+  assert.deepEqual(problems, []);
+});
