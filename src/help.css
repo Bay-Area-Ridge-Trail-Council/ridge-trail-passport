@@ -44,7 +44,7 @@
   /* Covers the whole screen, the Map-tab header and the tab bar included,
      so nothing behind Help can be tapped while it is open. */
   .help-backdrop{position:fixed;align-items:flex-end;padding:10px 10px calc(10px + env(safe-area-inset-bottom))}
-  .help-panel{width:100%;max-height:min(78dvh,680px);border-radius:18px;padding:20px 18px 18px}
+  .help-panel{width:100%;max-height:min(78dvh,680px);border-radius:18px;padding:20px 18px 18px;background:var(--panel)}
   .help-panel h2{font-size:23px}
   .help-intro{margin-bottom:16px}
   .help-install-grid,.help-backup-actions,.help-companion-grid,.help-resource-grid{grid-template-columns:1fr}

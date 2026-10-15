@@ -29,11 +29,11 @@
   #homeBtn svg,#locateBtn svg,#helpBtn svg,#feedbackBtn svg{display:block;width:24px;height:24px;flex:0 0 auto}
   #homeBtn span,#locateBtn span,#helpBtn span,#feedbackBtn span{display:none}
   .legend{display:none}
-  .map-hint{left:50%;right:auto;bottom:14px;transform:translateX(-50%);width:min(320px,calc(100% - 40px));max-width:none;padding:8px 12px;font-size:12px;line-height:1.3;white-space:normal;text-align:center}
+  .map-hint{left:50%;right:auto;bottom:14px;transform:translateX(-50%);width:min(320px,calc(100% - 40px));max-width:none;padding:8px 12px;font-size:12px;line-height:1.3;white-space:normal;text-align:center;background:var(--panel);background:color-mix(in srgb,var(--panel) 96%,transparent)}
   /* The detail sheet is docked on top of the tab bar: full width, the same
      hairline border, rounded only at the top, so sheet and bar read as one
      piece. The bar's own top border is the line between them. */
-  .sheet{position:absolute;left:0;right:0;bottom:0;width:auto;max-height:min(50dvh,460px);overflow-y:auto;border:1px solid var(--line);border-bottom:0;border-radius:var(--radius) var(--radius) 0 0}
+  .sheet{position:absolute;left:0;right:0;bottom:0;width:auto;max-height:min(50dvh,460px);overflow-y:auto;border:1px solid var(--line);border-bottom:0;border-radius:var(--radius) var(--radius) 0 0;background:var(--panel)}
 
   /* Tab content shown over the map (the Sections tab is the <aside>).
      Inactive tabs are hidden, not collapsed, so the section list keeps its
@@ -64,25 +64,29 @@
   .complete-circle{width:25px;height:25px}
   .chevron{font-size:19px}
 
+  /* Every phone surface (header, tab bar, detail sheet, map hint, Help)
+     uses the page background color, --panel in src/styles.css, so the strips
+     iOS Safari paints above the header and below the tab bar match them. */
+
   /* Slim Map-tab header: the Sections tab header (same logo, typeface and
      colors) condensed to one row, treated like the tab bar so the two read
      as one system. Its top padding clears the status bar and notch. */
-  .map-header{position:fixed;top:0;left:0;right:0;z-index:900;display:flex;align-items:center;gap:9px;height:var(--map-header-height);padding:env(safe-area-inset-top) 12px 0;background:var(--paper);border-bottom:1px solid var(--line)}
+  .map-header{position:fixed;top:0;left:0;right:0;z-index:900;display:flex;align-items:center;gap:9px;height:var(--map-header-height);padding:env(safe-area-inset-top) 12px 0;background:var(--panel);border-bottom:1px solid var(--line)}
   @supports ((-webkit-backdrop-filter:blur(20px)) or (backdrop-filter:blur(20px))){
-    .map-header{background:rgba(255,255,255,.93);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px)}
+    .map-header{background:color-mix(in srgb,var(--panel) 93%,transparent);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px)}
   }
   /* A solid strip behind the status-bar area, so nothing shows through the
      see-through header there. It is empty when there is no notch. */
-  .map-header::before{content:"";position:fixed;top:0;left:0;right:0;z-index:-1;height:env(safe-area-inset-top);background:var(--paper)}
+  .map-header::before{content:"";position:fixed;top:0;left:0;right:0;z-index:-1;height:env(safe-area-inset-top);background:var(--panel)}
   .map-header-logo{width:32px;height:32px;object-fit:contain;flex:0 0 auto}
   .map-header-title{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:"Avenir Next Condensed","Arial Narrow","Avenir Next",Avenir,sans-serif;font-size:19px;font-weight:bold;line-height:1;letter-spacing:.01em;color:var(--rt-dark-blue)}
   .map-header .beta-badge{flex:0 0 auto;margin-top:0}
 
   /* Bottom tab bar. Opaque by default; see-through with a blur where the
-     browser supports it. */
-  .tab-bar{position:fixed;left:0;right:0;bottom:0;z-index:900;display:flex;height:var(--tab-bar-height);padding-bottom:env(safe-area-inset-bottom);background:var(--paper);border-top:1px solid var(--line)}
+     browser supports it. Browsers without color-mix keep the opaque color. */
+  .tab-bar{position:fixed;left:0;right:0;bottom:0;z-index:900;display:flex;height:var(--tab-bar-height);padding-bottom:env(safe-area-inset-bottom);background:var(--panel);border-top:1px solid var(--line)}
   @supports ((-webkit-backdrop-filter:blur(20px)) or (backdrop-filter:blur(20px))){
-    .tab-bar{background:rgba(255,255,255,.93);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px)}
+    .tab-bar{background:color-mix(in srgb,var(--panel) 93%,transparent);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px)}
   }
   /* Each tab shares the bar's width equally (50% each with two tabs) and
      is tappable across the bar's full height. */
