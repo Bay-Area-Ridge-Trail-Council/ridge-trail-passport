@@ -469,8 +469,27 @@ export function createUI({
 
   // The search box only changes the list; the map always shows every
   // section the other filters allow, so typing never redraws the map.
-  $("search").addEventListener("input", () => {
+  const searchInput = $("search");
+  const searchClear = $("searchClear");
+
+  // The × button shows only while there is something to clear.
+  function updateSearchClear() {
+    searchClear.hidden = searchInput.value === "";
+  }
+
+  searchInput.addEventListener("input", () => {
+    updateSearchClear();
     onSearchInput();
+  });
+
+  // Clears only the search text. County, Region and "Uncompleted only" are
+  // left as they are. Focus goes back to the search box so the visitor can
+  // type a new search straight away.
+  searchClear.addEventListener("click", () => {
+    searchInput.value = "";
+    updateSearchClear();
+    onSearchInput();
+    searchInput.focus();
   });
 
   for (const id of ["county", "region", "unfinished"]) {

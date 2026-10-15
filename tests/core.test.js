@@ -1161,3 +1161,52 @@ test("typing in search updates the list only; County, Region and Uncompleted onl
   for (const id of ["county", "region", "unfinished"]) element(id).dispatch("change");
   assert.deepEqual(calls, ["list", "filters", "filters", "filters"]);
 });
+
+test("search clear button: shown only with a query, clears just the search, and returns focus", async (t) => {
+  t.after(() => { delete globalThis.window; delete globalThis.document; });
+  const element = fakeSearchPage();
+  const { createUI } = await import("../src/ui.js");
+  const calls = [];
+  createUI({
+    progressStore: createProgressStore(new MemoryStorage()),
+    onSearchInput: () => calls.push("list"),
+    onFiltersChange: () => calls.push("filters")
+  });
+  const search = element("search");
+  const clear = element("searchClear");
+
+  search.value = "mount";
+  search.dispatch("input");
+  assert.equal(clear.hidden, false);
+
+  element("county").value = "Marin";
+  element("region").value = "North Bay";
+  element("unfinished").checked = true;
+
+  clear.dispatch("click");
+  assert.equal(search.value, "");
+  assert.equal(clear.hidden, true);
+  assert.equal(search.focused, true);
+  assert.deepEqual(calls, ["list", "list"], "clearing refreshes the list and nothing else");
+  assert.equal(element("county").value, "Marin");
+  assert.equal(element("region").value, "North Bay");
+  assert.equal(element("unfinished").checked, true);
+
+  // Deleting the text by hand also hides the button.
+  search.value = "m";
+  search.dispatch("input");
+  search.value = "";
+  search.dispatch("input");
+  assert.equal(clear.hidden, true);
+});
+
+test("search clear button: labelled, a real button, starts hidden, and never covers typed text", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const read = (path) => readFile(new URL(path, import.meta.url), "utf8");
+  const [html, css] = await Promise.all([read("../index.html"), read("../src/styles.css")]);
+
+  assert.match(html, /<button id="searchClear" class="search-clear" type="button" aria-label="Clear search"[^>]* hidden>/);
+  assert.match(css, /\.search-field #search\{padding-right:42px\}/);
+  assert.match(css, /\.search-clear\{[^}]*right:4px;[^}]*width:32px;/);
+  assert.match(css, /#search::-webkit-search-cancel-button\{-webkit-appearance:none;appearance:none\}/);
+});

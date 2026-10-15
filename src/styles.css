@@ -55,6 +55,16 @@ input,select{width:100%;border:1px solid var(--line);border-radius:10px;padding:
 .empty{padding:24px 12px;color:var(--muted);text-align:center;font-size:13px}footer{flex:0 0 auto;font-size:10px;color:var(--muted);padding:10px 14px;border-top:1px solid var(--line);background:#FAFCFD}
 #list::-webkit-scrollbar,.sheet::-webkit-scrollbar{width:10px}#list::-webkit-scrollbar-thumb,.sheet::-webkit-scrollbar-thumb{background:#c8ceca;border-radius:999px;border:3px solid transparent;background-clip:padding-box}
 input:focus,select:focus,button:focus-visible,a:focus-visible{outline:3px solid rgba(114,196,215,.45);outline-offset:2px}
+/* Search clear (×) button. The input keeps its full width; the right padding
+   just stops typed text from running under the button. The browser's own
+   clear control is hidden so there is only one, and it looks the same on
+   every browser (iOS Safari does not reliably show its own). */
+.search-field{position:relative}
+.search-field #search{padding-right:42px}
+#search::-webkit-search-cancel-button{-webkit-appearance:none;appearance:none}
+.search-clear{position:absolute;top:50%;right:4px;transform:translateY(-50%);width:32px;height:32px;padding:0;border:0;border-radius:50%;background:transparent;color:var(--muted);font-size:22px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.search-clear:hover{background:#F2FAFB;color:var(--ink)}
+.search-clear[hidden]{display:none}
 
 /* Feedback links (map button and section list). The map button is a round
    icon button like Home and Help (sized in desktop.css / mobile-panel.css). */

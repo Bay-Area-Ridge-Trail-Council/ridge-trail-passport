@@ -105,7 +105,10 @@
 
       <div class="sidebar-scroll">
         <div class="tools">
-          <input id="search" type="search" placeholder="Search trail sections…" aria-label="Search trail sections" />
+          <div class="search-field">
+            <input id="search" type="search" placeholder="Search trail sections…" aria-label="Search trail sections" />
+            <button id="searchClear" class="search-clear" type="button" aria-label="Clear search" title="Clear search" hidden><span aria-hidden="true">×</span></button>
+          </div>
           <div class="row">
             <select id="county" aria-label="Filter by county"><option value="">All counties</option></select>
             <select id="region" aria-label="Filter by region"><option value="">All regions</option></select>
