@@ -2,8 +2,9 @@
 //
 // During `npm run build`, a small step in vite.config.js fills in BUILD_ID
 // and BUILD_ASSETS below (between the "build:" and "end" markers) with the list
-// of that build's hashed files, e.g. assets/index-D-uGn5bA.css. Look at
-// dist/sw.js to see the real values.
+// of that build's hashed files, e.g. assets/index-D-uGn5bA.css. It also fills
+// in BASEMAP_STYLE_URL from src/config.js. Look at dist/sw.js to see the real
+// values.
 //
 // Because the list changes whenever the app's code changes, each deploy
 // produces a different sw.js. The browser then installs the new service
@@ -12,10 +13,12 @@
 // build's worth of files, so it does not grow with every deploy.
 //
 // As written here (and in `npm run dev`, which has no build step), the list
-// is empty and BUILD_ID is "dev": the service worker caches nothing extra.
+// is empty, BUILD_ID is "dev" and BASEMAP_STYLE_URL is "": the service worker
+// caches nothing extra and leaves the basemap alone.
 
 const BUILD_ID = /* build:id */ "dev" /* end */;
 const BUILD_ASSETS = /* build:assets */ [] /* end */;
+const BASEMAP_STYLE_URL = /* build:basemap-style */ "" /* end */;
 
 const CACHE_PREFIX = "ridge-trail-passport-shell-";
 const CACHE_NAME = `${CACHE_PREFIX}${BUILD_ID}`;
@@ -172,16 +175,161 @@ async function cacheFirst(request) {
   return response;
 }
 
+// --- Basemap style files ----------------------------------------------------
+//
+// The basemap's style document, its sprite (map icons: a .json index and a
+// .png image) and its glyphs (font ranges for map labels) rarely change, so
+// they are served from the cache straight away and then refreshed in the
+// background for next time. A style change therefore shows up on the visit
+// after it is published. That is accepted.
+//
+// Map tiles are NOT cached; they always go straight to the network. Only
+// addresses named by the style document itself are cached: the style's own
+// address, its "sprite" address and its "glyphs" address pattern. Tiles come
+// from a different address (listed in the tile source, not in the style),
+// so they never match.
+//
+// Careful: glyph files and vector tiles both end in .pbf. They are told
+// apart by address, never by file extension:
+//   glyphs (cached):     https://tiles.openfreemap.org/fonts/Noto%20Sans%20Regular/0-255.pbf
+//   vector tile (never): https://tiles.openfreemap.org/planet/20250101_001001_pt/9/81/197.pbf
+//
+// These live in their own cache, separate from the app's files, so a new
+// deploy of the app does not delete them.
+const BASEMAP_CACHE = "ridge-trail-passport-basemap";
+
+// Which sprite and glyph addresses the cached style uses. Read from the
+// cached style when the service worker starts, and updated whenever a new
+// style arrives. Until then (the very first visit), only the style itself
+// is cached; its sprite and glyphs are cached from the next visit on.
+let styleFiles = null;
+
+// Given a style document, returns a test for whether an address is one of
+// the files it names (the style itself, its sprite or its glyphs).
+function styleFileTest(style) {
+  const sprites = [];
+  const spriteSetting = style?.sprite;
+  for (const sprite of Array.isArray(spriteSetting) ? spriteSetting : [spriteSetting]) {
+    const address = typeof sprite === "string" ? sprite : sprite?.url;
+    if (typeof address === "string") sprites.push(address);
+  }
+
+  // The glyphs setting is an address with {fontstack} and {range} in it,
+  // e.g. https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf
+  let glyphs = null;
+  if (typeof style?.glyphs === "string") {
+    const escaped = style.glyphs.replace(/[.*+?^$()|[\]\\]/g, "\\$&");
+    glyphs = new RegExp(
+      "^" +
+        escaped
+          .replace("{fontstack}", "[^/?#]+")
+          .replace("{range}", "\\d+-\\d+") +
+        "$"
+    );
+  }
+
+  return (address) => {
+    if (address === BASEMAP_STYLE_URL) return true;
+    // MapLibre asks for <sprite>.json and <sprite>.png, or @2x versions of
+    // both on high-resolution screens.
+    for (const sprite of sprites) {
+      if (/^(?:@2x)?\.(?:json|png)$/.test(address.slice(sprite.length)) &&
+        address.startsWith(sprite)) {
+        return true;
+      }
+    }
+    return Boolean(glyphs?.test(address));
+  };
+}
+
+async function loadStyleFiles() {
+  try {
+    const cache = await caches.open(BASEMAP_CACHE);
+    const cached = await cache.match(BASEMAP_STYLE_URL);
+    if (cached && !styleFiles) styleFiles = styleFileTest(await cached.json());
+  } catch {
+    // No usable cached style yet; it will be cached on this visit.
+  }
+}
+
+if (BASEMAP_STYLE_URL) loadStyleFiles();
+
+function isBasemapStyleFile(address) {
+  if (!BASEMAP_STYLE_URL) return false;
+  if (address === BASEMAP_STYLE_URL) return true;
+  return Boolean(styleFiles?.(address));
+}
+
+// Stores a fresh copy. When it is the style document, also removes cached
+// sprite and glyph files the new style no longer uses (for example after
+// the provider moves to a new sprite version), so old files don't pile up.
+async function saveBasemapFile(cache, address, response) {
+  if (address !== BASEMAP_STYLE_URL) {
+    await cache.put(address, response);
+    return;
+  }
+
+  const style = await response.clone().json();
+  await cache.put(address, response);
+  styleFiles = styleFileTest(style);
+
+  for (const request of await cache.keys()) {
+    if (!styleFiles(request.url)) await cache.delete(request);
+  }
+}
+
+// Downloads a fresh copy and saves it over the cached one. "no-cache" lets
+// the browser ask the server whether its own copy is still current instead
+// of downloading it again. If the network or server fails, nothing changes.
+async function refreshBasemapFile(address) {
+  try {
+    const response = await fetch(address, { cache: "no-cache" });
+    if (!response.ok) return;
+
+    const cache = await caches.open(BASEMAP_CACHE);
+    await saveBasemapFile(cache, address, response);
+  } catch {
+    // Offline or the server is down: keep serving the cached copy.
+  }
+}
+
+// Cached copy first; fetch a fresh one in the background for next time. If
+// that fails (offline), the cached copy simply stays.
+async function cacheFirstThenRefresh(event) {
+  const address = event.request.url;
+  const cache = await caches.open(BASEMAP_CACHE);
+  // MapLibre sends an Accept header; ignore it when looking up the copy.
+  const cached = await cache.match(address, { ignoreVary: true });
+
+  if (cached) {
+    event.waitUntil(refreshBasemapFile(address));
+    return cached;
+  }
+
+  // Nothing cached yet: answer from the network and keep a copy. If the
+  // network fails, the map gets the usual error, which it already handles.
+  const response = await fetch(event.request);
+  if (response.ok) {
+    event.waitUntil(saveBasemapFile(cache, address, response.clone()).catch(() => {}));
+  }
+  return response;
+}
+
 self.addEventListener("fetch", (event) => {
   const request = event.request;
   if (request.method !== "GET") return;
 
   const url = new URL(request.url);
 
-  // Deliberately leave ArcGIS, the basemap (OpenFreeMap style and tiles),
-  // attachment images, and every other third-party request to the
-  // browser/network. This service worker caches only the Passport's own
-  // same-origin application files.
+  // The basemap's style, sprite and glyphs (see "Basemap style files").
+  if (isBasemapStyleFile(request.url)) {
+    event.respondWith(cacheFirstThenRefresh(event));
+    return;
+  }
+
+  // Deliberately leave ArcGIS, map tiles, attachment images, and every other
+  // third-party request to the browser/network. ArcGIS data is already kept
+  // in IndexedDB by the app; a second copy here would drift out of step.
   if (url.origin !== self.location.origin) return;
 
   if (url.pathname.endsWith("/sw.js")) return;
