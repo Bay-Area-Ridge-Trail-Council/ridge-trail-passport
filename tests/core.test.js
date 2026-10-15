@@ -872,3 +872,209 @@ test("with no current style, the basemap style is used unchanged", () => {
   const next = basemapStyle();
   assert.equal(carryOverAppLayers(undefined, next, ["ridge-trail"]), next);
 });
+
+// --- Service worker: basemap style, sprite and glyphs -------------------------
+
+const OFM = "https://tiles.openfreemap.org";
+const STYLE_URL = `${OFM}/styles/liberty`;
+
+function basemapStyleDocument(spriteFolder = "ofm_f384", fontsFolder = "fonts") {
+  return {
+    version: 8,
+    sprite: `${OFM}/sprites/${spriteFolder}/ofm`,
+    glyphs: `${OFM}/${fontsFolder}/{fontstack}/{range}.pbf`,
+    sources: { openmaptiles: { type: "vector", url: `${OFM}/planet` } },
+    layers: []
+  };
+}
+
+// Runs public/sw.js (with the style address filled in, as the build does)
+// against in-memory caches and a stand-in network.
+async function startServiceWorker({ cachedStyle, network }) {
+  const { readFile } = await import("node:fs/promises");
+  const source = (await readFile(new URL("../public/sw.js", import.meta.url), "utf8"))
+    .replace(/\/\* build:basemap-style \*\/.*?\/\* end \*\//, JSON.stringify(STYLE_URL));
+
+  const stores = new Map();
+  const store = (name) => {
+    if (!stores.has(name)) stores.set(name, new Map());
+    return stores.get(name);
+  };
+  const fakeCaches = {
+    open: async (name) => {
+      const entries = store(name);
+      return {
+        match: async (key) => entries.get(typeof key === "string" ? key : key.url)?.clone(),
+        put: async (key, response) => { entries.set(typeof key === "string" ? key : key.url, response); },
+        keys: async () => [...entries.keys()].map((url) => ({ url })),
+        delete: async (key) => entries.delete(typeof key === "string" ? key : key.url)
+      };
+    },
+    keys: async () => [...stores.keys()],
+    delete: async (name) => stores.delete(name)
+  };
+
+  const basemap = store("ridge-trail-passport-basemap");
+  if (cachedStyle) basemap.set(STYLE_URL, Response.json(cachedStyle));
+
+  const fetched = [];
+  const fakeFetch = async (input) => {
+    const url = typeof input === "string" ? input : input.url;
+    fetched.push(url);
+    return network(url);
+  };
+
+  const listeners = {};
+  const fakeSelf = {
+    registration: { scope: "https://example.org/" },
+    location: { origin: "https://example.org" },
+    addEventListener: (type, listener) => { listeners[type] = listener; },
+    skipWaiting: async () => {},
+    clients: { claim: async () => {} }
+  };
+  new Function("self", "caches", "fetch", source)(fakeSelf, fakeCaches, fakeFetch);
+  // Let it read the cached style, as it does when it starts.
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  // Sends one request through the service worker. answered is false when it
+  // was left to go straight to the network.
+  async function request(url) {
+    let answer;
+    const background = [];
+    listeners.fetch({
+      request: new Request(url),
+      respondWith: (promise) => { answer = promise; },
+      waitUntil: (promise) => { background.push(promise); }
+    });
+    if (!answer) return { answered: false };
+    const response = await answer;
+    await Promise.all(background);
+    return { answered: true, response };
+  }
+
+  return { request, fetched, basemap };
+}
+
+const GLYPH_URL = `${OFM}/fonts/Noto%20Sans%20Regular/0-255.pbf`;
+const GLYPH_URL_2 = `${OFM}/fonts/Noto%20Sans%20Bold/8192-8447.pbf`;
+const SPRITE_FILES = ["@2x.json", "@2x.png", ".json", ".png"].map((end) => `${OFM}/sprites/ofm_f384/ofm${end}`);
+
+test("service worker: map tiles, the tile list, hillshade and ArcGIS go straight to the network", async () => {
+  const sw = await startServiceWorker({
+    cachedStyle: basemapStyleDocument(),
+    network: async () => assert.fail("nothing here should be fetched by the service worker")
+  });
+
+  for (const url of [
+    // Vector tiles are .pbf like glyphs, but from the tile address, so never cached.
+    `${OFM}/planet/20250101_001001_pt/9/81/197.pbf`,
+    `${OFM}/planet/20250101_001001_pt/14/2621/6331.pbf`,
+    `${OFM}/planet`,
+    `${OFM}/natural_earth/ne2sr/5/5/12.png`,
+    `${OFM}/fonts/Noto%20Sans%20Regular/not-a-range.pbf`,
+    `${CONFIG.featureService}/query?where=1%3D1&f=geojson`,
+    `${CONFIG.featureService}/12/attachments?f=json`
+  ]) {
+    assert.equal((await sw.request(url)).answered, false, `${url} must not be handled`);
+  }
+  assert.deepEqual([...sw.basemap.keys()], [STYLE_URL], "nothing new was cached");
+});
+
+test("service worker: style, sprite and glyphs come from the cache, then are refreshed in the background", async () => {
+  const sw = await startServiceWorker({
+    cachedStyle: basemapStyleDocument(),
+    network: async (url) => url === STYLE_URL
+      ? Response.json({ ...basemapStyleDocument(), name: "fresh" })
+      : new Response(`fresh ${url}`)
+  });
+  for (const url of [...SPRITE_FILES, GLYPH_URL, GLYPH_URL_2]) sw.basemap.set(url, new Response(`old ${url}`));
+
+  const style = await sw.request(STYLE_URL);
+  assert.equal(style.answered, true);
+  assert.equal((await style.response.json()).name, undefined, "the cached copy is served");
+  assert.equal((await sw.basemap.get(STYLE_URL).clone().json()).name, "fresh", "and replaced for next time");
+
+  for (const url of [...SPRITE_FILES, GLYPH_URL, GLYPH_URL_2]) {
+    const result = await sw.request(url);
+    assert.equal(result.answered, true, `${url} is handled`);
+    assert.equal(await result.response.text(), `old ${url}`);
+    assert.equal(await sw.basemap.get(url).clone().text(), `fresh ${url}`);
+  }
+});
+
+test("service worker: when offline, the cached style, sprite and glyphs keep being served", async () => {
+  const sw = await startServiceWorker({
+    cachedStyle: basemapStyleDocument(),
+    network: async () => { throw new TypeError("Failed to fetch"); }
+  });
+  sw.basemap.set(GLYPH_URL, new Response("glyphs"));
+
+  assert.equal((await (await sw.request(STYLE_URL)).response.json()).sprite, basemapStyleDocument().sprite);
+  assert.equal(await (await sw.request(GLYPH_URL)).response.text(), "glyphs");
+  assert.ok(sw.basemap.has(STYLE_URL) && sw.basemap.has(GLYPH_URL), "nothing is lost");
+
+  // A server error is treated the same way: the cached copy stays.
+  const failing = await startServiceWorker({
+    cachedStyle: basemapStyleDocument(),
+    network: async () => new Response("down", { status: 503 })
+  });
+  await failing.request(STYLE_URL);
+  assert.equal((await failing.basemap.get(STYLE_URL).clone().json()).sprite, basemapStyleDocument().sprite);
+});
+
+test("service worker: on the first visit the style is fetched and kept, and its sprite and glyphs are then cached", async () => {
+  const sw = await startServiceWorker({
+    cachedStyle: null,
+    network: async (url) => url === STYLE_URL ? Response.json(basemapStyleDocument()) : new Response(`from ${url}`)
+  });
+
+  const style = await sw.request(STYLE_URL);
+  assert.equal((await style.response.json()).sprite, basemapStyleDocument().sprite);
+  assert.ok(sw.basemap.has(STYLE_URL));
+
+  const glyphs = await sw.request(GLYPH_URL);
+  assert.equal(glyphs.answered, true);
+  assert.equal(await glyphs.response.text(), `from ${GLYPH_URL}`);
+  assert.ok(sw.basemap.has(GLYPH_URL));
+});
+
+test("service worker: a new style version removes cached sprite and glyph files it no longer uses", async () => {
+  const sw = await startServiceWorker({
+    cachedStyle: basemapStyleDocument("ofm_f384", "fonts"),
+    network: async (url) => url === STYLE_URL
+      ? Response.json(basemapStyleDocument("ofm_f999", "fonts-v2"))
+      : new Response(url)
+  });
+  for (const url of [...SPRITE_FILES, GLYPH_URL, GLYPH_URL_2]) sw.basemap.set(url, new Response("old"));
+
+  // This visit still gets the cached style (the new one applies next visit).
+  await sw.request(STYLE_URL);
+  assert.deepEqual([...sw.basemap.keys()], [STYLE_URL], "old sprite and glyphs are removed");
+
+  // The new style's files are cached from now on; the old ones are not.
+  const newSprite = `${OFM}/sprites/ofm_f999/ofm@2x.png`;
+  const newGlyphs = `${OFM}/fonts-v2/Noto%20Sans%20Regular/0-255.pbf`;
+  assert.equal((await sw.request(newSprite)).answered, true);
+  assert.equal((await sw.request(newGlyphs)).answered, true);
+  assert.equal((await sw.request(SPRITE_FILES[0])).answered, false);
+  assert.deepEqual([...sw.basemap.keys()].sort(), [newGlyphs, newSprite, STYLE_URL].sort());
+});
+
+test("service worker: the basemap cache is separate from the app's files and survives a new deploy", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const [sw, viteConfig] = await Promise.all([
+    readFile(new URL("../public/sw.js", import.meta.url), "utf8"),
+    readFile(new URL("../vite.config.js", import.meta.url), "utf8")
+  ]);
+
+  const shellPrefix = sw.match(/const CACHE_PREFIX = "([^"]+)";/)[1];
+  const basemapCache = sw.match(/const BASEMAP_CACHE = "([^"]+)";/)[1];
+  // activate deletes every cache starting with the app's prefix.
+  assert.ok(!basemapCache.startsWith(shellPrefix));
+
+  // The style address is written down once, in config.js; the build fills it in.
+  assert.match(sw, /const BASEMAP_STYLE_URL = \/\* build:basemap-style \*\/ "" \/\* end \*\/;/);
+  assert.ok(viteConfig.includes("JSON.stringify(CONFIG.basemap.styleUrl)"));
+  const code = sw.split("\n").filter((line) => !line.trim().startsWith("//")).join("\n");
+  assert.ok(!code.includes("openfreemap.org"), "no basemap address is written into sw.js code");
+});

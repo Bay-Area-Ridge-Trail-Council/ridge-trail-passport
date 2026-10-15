@@ -80,11 +80,16 @@ any server. If this app loses someone's data, it is gone permanently.
   imported files. Keep the prefix.
 - `src/data.js` requests only the fields listed in `CONFIG.featureFields`. Keep
   the list minimal.
-- `public/sw.js` deliberately caches same-origin files only. It must not cache
-  basemap tiles (OpenFreeMap) or ArcGIS responses — that would violate the tile
-  usage policy. It does cache same-origin files the app's scripts load by
-  themselves, such as MapLibre's background worker; without that, the trail
-  cannot be drawn offline.
+- `public/sw.js` caches the app's own same-origin files, including files the
+  app's scripts load by themselves, such as MapLibre's background worker;
+  without that, the trail cannot be drawn offline.
+- Of the basemap, the style document, sprite and glyphs MAY be cached. They
+  are served from the cache and refreshed in the background, in a cache of
+  their own. `public/sw.js` must not cache vector tiles (.pbf served from the
+  tile endpoint) — nor the style's raster tiles — or ArcGIS responses. Glyphs
+  are also .pbf files: tell them apart by address, never by file extension.
+  ArcGIS caching stays prohibited because the app already caches that data in
+  IndexedDB, and a second copy would diverge.
 - `public/sw.js` is not exactly what ships: `npm run build` fills in the list
   of that build's hashed files (`assets/name-XXXXXXXX.js|css`) in `dist/sw.js`
   (see `vite.config.js`). Each deploy therefore installs a new service worker,

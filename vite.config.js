@@ -9,9 +9,10 @@ import { trailQueryUrl } from "./src/data.js";
 // Must match HASHED_ASSET in public/sw.js.
 const HASHED_ASSET = /^assets\/[^/]+-[A-Za-z0-9_-]{8}\.(?:js|css)$/;
 
-// Writes this build's hashed file list into dist/sw.js (see the note at the
-// top of public/sw.js). public/sw.js itself is never changed. Only runs for
-// `npm run build`; `npm run dev` serves public/sw.js with an empty list.
+// Writes this build's hashed file list and the basemap style address (from
+// src/config.js) into dist/sw.js (see the note at the top of public/sw.js).
+// public/sw.js itself is never changed. Only runs for `npm run build`;
+// `npm run dev` serves public/sw.js with an empty list and no basemap address.
 function serviceWorkerFileList() {
   let hashedFiles = [];
   let outDir;
@@ -36,10 +37,11 @@ function serviceWorkerFileList() {
 
       const filled = source
         .replace(/\/\* build:id \*\/.*?\/\* end \*\//, JSON.stringify(buildId))
-        .replace(/\/\* build:assets \*\/.*?\/\* end \*\//, JSON.stringify(hashedFiles.map((f) => `./${f}`)));
+        .replace(/\/\* build:assets \*\/.*?\/\* end \*\//, JSON.stringify(hashedFiles.map((f) => `./${f}`)))
+        .replace(/\/\* build:basemap-style \*\/.*?\/\* end \*\//, JSON.stringify(CONFIG.basemap.styleUrl));
 
       // Fail the build rather than ship a service worker without its list.
-      if (/\/\* build:(id|assets) \*\//.test(filled) || hashedFiles.length === 0) {
+      if (/\/\* build:(id|assets|basemap-style) \*\//.test(filled) || hashedFiles.length === 0) {
         throw new Error("Could not write the build's file list into dist/sw.js");
       }
 
