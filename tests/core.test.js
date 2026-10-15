@@ -1396,6 +1396,8 @@ test("phone surfaces and the browser theme color all use the page background col
   }
   assert.match(rule(phone, ".map-hint"), /background:var\(--panel\);background:color-mix\(in srgb,var\(--panel\) 96%,transparent\)/);
   assert.match(rule(phoneOf(help), ".help-panel"), /background:var\(--panel\)/);
+  // The Help close button keeps a visible circle on the off-white panel.
+  assert.match(rule(phoneOf(help), ".help-close"), /background:var\(--line\)/);
   assert.ok(!/255,255,255/.test(phone.match(/\.(map-header|tab-bar)\{background:[^;]*/g).join()));
 
   // The browser's own toolbar color matches (a meta tag cannot read --panel).
