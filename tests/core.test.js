@@ -1078,3 +1078,86 @@ test("service worker: the basemap cache is separate from the app's files and sur
   const code = sw.split("\n").filter((line) => !line.trim().startsWith("//")).join("\n");
   assert.ok(!code.includes("openfreemap.org"), "no basemap address is written into sw.js code");
 });
+
+// A tiny stand-in for the page, just enough for createUI() to run in Node.
+function fakeSearchPage() {
+  const elements = new Map();
+
+  function element(id) {
+    if (!elements.has(id)) {
+      const listeners = {};
+      elements.set(id, {
+        id,
+        value: "",
+        checked: false,
+        hidden: false,
+        focused: false,
+        classList: { add() {}, remove() {}, toggle() {}, contains: () => false },
+        addEventListener(type, listener) {
+          (listeners[type] ||= []).push(listener);
+        },
+        dispatch(type) {
+          for (const listener of listeners[type] || []) listener({ type });
+        },
+        focus() { this.focused = true; }
+      });
+    }
+    return elements.get(id);
+  }
+
+  globalThis.window = {};
+  globalThis.document = { getElementById: element };
+  return element;
+}
+
+function searchTestFeatures() {
+  return [
+    makeFeature({ OBJECTID: 1, Section_Name: "Mount Tamalpais", County: "Marin", Region: "North Bay", Trail_Type: "Primary", Segment_ID: "A" }),
+    makeFeature({ OBJECTID: 2, Section_Name: "Mount Diablo", County: "Contra Costa", Region: "East Bay", Trail_Type: "Primary", Segment_ID: "B" }),
+    makeFeature({ OBJECTID: 3, Section_Name: "Skyline", County: "Marin", Region: "North Bay", Trail_Type: "Primary", Segment_ID: "C" })
+  ];
+}
+
+test("search narrows the list but never hides sections from the map; other filters still apply to both", async (t) => {
+  t.after(() => { delete globalThis.window; delete globalThis.document; });
+  const element = fakeSearchPage();
+  const { createUI } = await import("../src/ui.js");
+  const progressStore = createProgressStore(new MemoryStorage());
+  const ui = createUI({ progressStore });
+  const ids = (list) => list.map((feature) => feature.properties.OBJECTID);
+  const features = searchTestFeatures();
+
+  element("search").value = "mount";
+  assert.deepEqual(ids(ui.filterFeatures(features)), [1, 2]);
+  assert.deepEqual(ids(ui.filterFeatures(features, { includeSearch: false })), [1, 2, 3]);
+
+  // County is unchanged: it still narrows both the list and the map.
+  element("county").value = "Marin";
+  assert.deepEqual(ids(ui.filterFeatures(features)), [1]);
+  assert.deepEqual(ids(ui.filterFeatures(features, { includeSearch: false })), [1, 3]);
+
+  // The map is drawn from the search-free list.
+  const main = await (await import("node:fs/promises")).readFile(new URL("../src/main.js", import.meta.url), "utf8");
+  assert.match(main, /function visibleFeatures\(\) \{\s*return ui\.filterFeatures\(features, \{ includeSearch: false \}\);/);
+  assert.match(main, /const visible = visibleFeatures\(\);\s*ridgeMap\.render\(visible, selectedObjectId\);/);
+});
+
+test("typing in search updates the list only; County, Region and Uncompleted only update the map", async (t) => {
+  t.after(() => { delete globalThis.window; delete globalThis.document; });
+  const element = fakeSearchPage();
+  const { createUI } = await import("../src/ui.js");
+  const calls = [];
+  createUI({
+    progressStore: createProgressStore(new MemoryStorage()),
+    onSearchInput: () => calls.push("list"),
+    onFiltersChange: () => calls.push("filters")
+  });
+
+  element("search").value = "mount";
+  element("search").dispatch("input");
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  assert.deepEqual(calls, ["list"]);
+
+  for (const id of ["county", "region", "unfinished"]) element(id).dispatch("change");
+  assert.deepEqual(calls, ["list", "filters", "filters", "filters"]);
+});
