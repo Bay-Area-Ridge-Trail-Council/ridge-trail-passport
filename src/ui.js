@@ -459,11 +459,22 @@ export function createUI({
   function coveredMapEdges() {
     const sheet = $("sheet");
     const open = sheet.classList.contains("open");
+    // The header is the slim Map-tab header on phones. The map area starts
+    // below it, so today it covers nothing, but measuring it keeps this
+    // right if the header is ever moved over the map. On desktop it is not
+    // displayed. (The section list is never measured: on desktop it sits
+    // beside the map, and on phones the Map tab is always showing when a
+    // section is selected.)
+    const header = $("mapHeader");
+    const headerShowing =
+      header &&
+      header.getClientRects().length > 0 &&
+      getComputedStyle(header).visibility !== "hidden";
 
     return coveredEdges(
       $("map").getBoundingClientRect(),
       open ? sheet.getBoundingClientRect() : null,
-      document.querySelector("aside")?.getBoundingClientRect()
+      headerShowing ? header.getBoundingClientRect() : null
     );
   }
 

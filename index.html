@@ -58,7 +58,16 @@
 </head>
 <body>
   <div id="app">
-    <aside>
+    <!-- Slim header shown on phones on the Map tab only (see mobile-panel.css).
+         The Sections tab has its own, larger header inside the <aside>. -->
+    <header class="map-header" id="mapHeader">
+      <img class="map-header-logo" src="./ridge-trail-logo.png" alt="Bay Area Ridge Trail" />
+      <span class="map-header-title">Ridge Trail Passport</span>
+      <span class="beta-badge">Beta</span>
+    </header>
+
+    <!-- On phones this is the Sections tab (see src/tab-bar.js). -->
+    <aside id="sectionsPanel" data-tab-panel>
       <div class="brand">
         <div class="brand-lockup">
           <img class="brand-logo" src="./ridge-trail-logo.png" alt="Bay Area Ridge Trail" />
@@ -169,7 +178,7 @@
       <div class="status" id="status" role="status" aria-live="polite" aria-atomic="true"></div>
       <div class="map-hint" id="mapHint">Tap a main Ridge Trail line to view details and mark it complete</div>
 
-      <section class="sheet" id="sheet" aria-labelledby="sheetTitle">
+      <section class="sheet" id="sheet" aria-labelledby="sheetTitle" tabindex="-1">
         <button class="close" id="closeSheet" type="button" aria-label="Close">×</button>
         <div class="eyebrow" id="sheetEyebrow">Trail section</div>
         <h2 id="sheetTitle"></h2>
@@ -287,6 +296,9 @@
         </section>
       </div>
     </main>
+
+    <!-- Bottom tab bar on phones. The buttons are built from TABS in src/tab-bar.js. -->
+    <nav class="tab-bar" id="tabBar" aria-label="Main"></nav>
   </div>
 
   <!-- First-run beta notice. Shown until the visitor ticks the box and taps

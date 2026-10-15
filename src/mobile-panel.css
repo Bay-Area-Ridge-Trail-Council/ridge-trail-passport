@@ -1,53 +1,97 @@
-/* Mobile section browser and all app-level layout changes at 800px and below. */
+/* Phone layout and all app-level layout changes at 800px and below.
+   The map fills the screen and a bottom tab bar (built from TABS in
+   src/tab-bar.js) switches between the Map tab and the Sections tab.
+   On the Map tab a slim header sits at the top, styled like the tab bar.
+   The old dropdown toggle button is still in index.html but always hidden. */
 .mobile-panel-toggle{display:none}
+.tab-bar,.map-header{display:none}
 
 @media (max-width:800px){
-  #app{display:block;width:100%;height:100vh;height:100dvh;overflow:hidden}
-  aside{position:absolute;z-index:650;left:10px;right:10px;top:10px;height:64px;min-height:64px;border:0;border-radius:16px;box-shadow:var(--shadow);overflow:hidden;transition:height .16s ease}
+  #app{--tab-bar-height:calc(56px + env(safe-area-inset-bottom));--map-header-height:calc(52px + env(safe-area-inset-top));display:block;width:100%;height:100vh;height:100dvh;overflow:hidden}
   .maplibregl-ctrl-top-left .maplibregl-ctrl-group,.maplibregl-ctrl-scale{display:none}
   /* Treat Passport chrome as app UI: keep normal scrolling/pinch zoom, but avoid browser double-tap zoom. */
-  aside,aside *,.map-actions,.map-actions *,.map-hint,.sheet,.sheet *,.help-backdrop,.help-backdrop *{touch-action:manipulation}
-  .brand{height:64px;padding:7px 10px;border-bottom:0;flex:0 0 auto}
-  .brand-lockup{height:50px;gap:9px}
+  aside,aside *,.map-actions,.map-actions *,.map-hint,.sheet,.sheet *,.help-backdrop,.help-backdrop *,.tab-bar,.tab-bar *,.map-header,.map-header *{touch-action:manipulation}
+
+  /* Map tab. The map area runs from the bottom of the slim header to the
+     top of the tab bar, so everything placed at the edges of the map (the
+     round buttons, status messages, the detail sheet, the hint, the map
+     credits) sits clear of both by itself. The map keeps this size under
+     every tab. Never display:none it: MapLibre sizes itself to 0x0 and does
+     not recover. While another tab covers it, the map and its controls are
+     only made invisible (visibility keeps their size), which also keeps
+     screen readers and the keyboard out of them. Status messages stay
+     visible. */
+  .map-wrap{position:absolute;top:var(--map-header-height);left:0;right:0;bottom:var(--tab-bar-height);width:auto;height:auto}
+  #map{position:absolute;inset:0;width:100%;height:100%}
+  #app[data-active-tab]:not([data-active-tab="map"]) :is(#map,.map-actions,.legend,.map-hint,.sheet,.map-header){visibility:hidden}
+  .map-actions{top:14px;right:14px;bottom:auto;gap:8px;flex-direction:column;align-items:center}
+  #homeBtn,#locateBtn,#helpBtn,#feedbackBtn{width:44px;height:44px;padding:0;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;background:rgba(255,255,255,.97)}
+  #homeBtn svg,#locateBtn svg,#helpBtn svg,#feedbackBtn svg{display:block;width:24px;height:24px;flex:0 0 auto}
+  #homeBtn span,#locateBtn span,#helpBtn span,#feedbackBtn span{display:none}
+  .legend{display:none}
+  .map-hint{left:50%;right:auto;bottom:14px;transform:translateX(-50%);width:min(320px,calc(100% - 40px));max-width:none;padding:8px 12px;font-size:12px;line-height:1.3;white-space:normal;text-align:center}
+  /* The detail sheet is docked on top of the tab bar: full width, the same
+     hairline border, rounded only at the top, so sheet and bar read as one
+     piece. The bar's own top border is the line between them. */
+  .sheet{position:absolute;left:0;right:0;bottom:0;width:auto;max-height:min(50dvh,460px);overflow-y:auto;border:1px solid var(--line);border-bottom:0;border-radius:var(--radius) var(--radius) 0 0}
+
+  /* Tab content shown over the map (the Sections tab is the <aside>).
+     Inactive tabs are hidden, not collapsed, so the section list keeps its
+     scroll position when you switch away and back. */
+  [data-tab-panel]{position:absolute;inset:0;z-index:800;visibility:hidden}
+  [data-tab-panel].tab-panel-active{visibility:visible}
+
+  /* Sections tab: header and progress stay put; .sidebar-scroll is the
+     tab's own scrolling area. Its bottom padding lets the last section
+     scroll clear of the tab bar. */
+  aside{display:flex;flex-direction:column;border:0;padding-top:env(safe-area-inset-top)}
+  .brand{flex:0 0 auto;padding:0;border-bottom:1px solid var(--line)}
+  .brand-lockup{height:64px;padding:7px 10px;gap:9px}
   .brand-logo{width:44px;height:44px}
   .brand-copy{flex:1 1 auto;min-width:0}
   .brand-copy h1{margin:0;font-size:19px;line-height:1;white-space:nowrap}
   .beta-badge{margin-top:4px}
   .sub,footer{display:none}
-  .progress-card{margin-top:9px;padding:9px 10px}
+  .progress-card{margin:0 12px 12px;padding:10px 11px}
   .big{font-size:20px}
-  .tools{padding:8px;flex:0 0 auto}
-  #list{display:grid;flex:1 1 auto;min-height:0;overflow-y:auto;padding:7px}
+  .sidebar-scroll{flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding-bottom:var(--tab-bar-height)}
+  .tools{display:grid;gap:10px;padding:10px 12px 12px}
+  .tools #search{margin:0}
+  .tools .toggle{margin:0 0 2px}
+  .sidebar-scroll>#list{display:grid;overflow:visible;height:auto;max-height:none;min-height:0;padding:6px 12px 16px}
   .trail-card{padding:9px 10px;gap:8px}
   .trail-card-side{gap:6px}
   .complete-circle{width:25px;height:25px}
   .chevron{font-size:19px}
-  .map-wrap{position:absolute;inset:0;width:100%;height:100%}
-  #map{position:absolute;inset:0;width:100%;height:100%}
-  .map-actions{top:84px;right:14px;bottom:auto;gap:8px;flex-direction:column;align-items:center}
-  #homeBtn,#locateBtn,#helpBtn,#feedbackBtn{width:44px;height:44px;padding:0;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;background:rgba(255,255,255,.97)}
-  #homeBtn svg,#locateBtn svg,#helpBtn svg,#feedbackBtn svg{display:block;width:24px;height:24px;flex:0 0 auto}
-  #homeBtn span,#locateBtn span,#helpBtn span,#feedbackBtn span{display:none}
-  .legend{display:none}
-  .map-hint{left:50%;right:auto;bottom:18px;transform:translateX(-50%);width:min(320px,calc(100% - 40px));max-width:none;padding:8px 12px;font-size:12px;line-height:1.3;white-space:normal;text-align:center}
-  .sheet{position:absolute;left:10px;right:10px;bottom:10px;width:auto;max-height:min(50dvh,460px);overflow-y:auto}
-  .mobile-panel-toggle{display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;width:36px;height:36px;border:0;border-radius:50%;background:transparent;color:var(--rt-dark-blue);font-size:24px;line-height:1;padding:0}
-  .mobile-panel-toggle span{display:block;transform:translateY(-2px);transition:transform .16s ease}
-  #mobileBrowserContent,.sidebar-scroll{display:none}
-  #app.mobile-panel-open aside{height:min(78dvh,680px);min-height:0;display:block;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
-  #app.mobile-panel-open .brand{display:contents}
-  #app.mobile-panel-open .brand-lockup{position:sticky;top:0;z-index:6;width:100%;height:64px;padding:7px 10px;gap:9px;background:rgba(255,255,255,.98);border-bottom:1px solid var(--line);box-shadow:0 2px 8px rgba(0,59,93,.06)}
-  #app.mobile-panel-open .brand-copy h1{font-size:19px}
-  #app.mobile-panel-open .mobile-panel-toggle span{transform:rotate(180deg) translateY(2px)}
-  #app.mobile-panel-open #mobileBrowserContent,#app.mobile-panel-open .sidebar-scroll{display:block}
-  #app.mobile-panel-open .sidebar-scroll{overflow:visible}
-  #app.mobile-panel-open .progress-card{display:block;margin:12px 12px 10px;padding:10px 11px}
-  #app.mobile-panel-open .tools{display:grid;gap:10px;padding:10px 12px 12px}
-  #app.mobile-panel-open .tools #search{margin:0}
-  #app.mobile-panel-open .tools .toggle{margin:0 0 2px}
-  #app.mobile-panel-open .tools .row{display:none}
-  #app.mobile-panel-open .sidebar-scroll>#list{display:grid;overflow:visible;height:auto;max-height:none;min-height:0;padding:6px 12px 16px}
-  #app.mobile-panel-open .brand-intro,#app.mobile-panel-open .sidebar-scroll>footer{display:none}
+
+  /* Slim Map-tab header: the Sections tab header (same logo, typeface and
+     colors) condensed to one row, treated like the tab bar so the two read
+     as one system. Its top padding clears the status bar and notch. */
+  .map-header{position:fixed;top:0;left:0;right:0;z-index:900;display:flex;align-items:center;gap:9px;height:var(--map-header-height);padding:env(safe-area-inset-top) 12px 0;background:var(--paper);border-bottom:1px solid var(--line)}
+  @supports ((-webkit-backdrop-filter:blur(20px)) or (backdrop-filter:blur(20px))){
+    .map-header{background:rgba(255,255,255,.93);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px)}
+  }
+  /* A solid strip behind the status-bar area, so nothing shows through the
+     see-through header there. It is empty when there is no notch. */
+  .map-header::before{content:"";position:fixed;top:0;left:0;right:0;z-index:-1;height:env(safe-area-inset-top);background:var(--paper)}
+  .map-header-logo{width:32px;height:32px;object-fit:contain;flex:0 0 auto}
+  .map-header-title{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:"Avenir Next Condensed","Arial Narrow","Avenir Next",Avenir,sans-serif;font-size:19px;font-weight:bold;line-height:1;letter-spacing:.01em;color:var(--rt-dark-blue)}
+  .map-header .beta-badge{flex:0 0 auto;margin-top:0}
+
+  /* Bottom tab bar. Opaque by default; see-through with a blur where the
+     browser supports it. */
+  .tab-bar{position:fixed;left:0;right:0;bottom:0;z-index:900;display:flex;height:var(--tab-bar-height);padding-bottom:env(safe-area-inset-bottom);background:var(--paper);border-top:1px solid var(--line)}
+  @supports ((-webkit-backdrop-filter:blur(20px)) or (backdrop-filter:blur(20px))){
+    .tab-bar{background:rgba(255,255,255,.93);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px)}
+  }
+  /* Each tab shares the bar's width equally (50% each with two tabs) and
+     is tappable across the bar's full height. */
+  .tab-btn{flex:1 1 0;min-width:0;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:0;border:0;background:transparent;color:var(--muted);font-size:11px;font-weight:600;line-height:1}
+  .tab-icon{display:block;flex:0 0 auto;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+  /* The active tab differs in icon fill, label weight AND color. */
+  .tab-btn[aria-selected="true"]{color:var(--rt-dark-blue);font-weight:800}
+  .tab-btn[aria-selected="true"] .tab-icon-shape{fill:currentColor}
+  .tab-btn[aria-selected="true"] .tab-icon-detail{stroke:var(--paper)}
 }
 
 @media (max-width:520px){
