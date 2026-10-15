@@ -7,9 +7,7 @@ import {
   trailTypeLabel
 } from "./trails.js";
 import { coveredEdges } from "./panel-offset.js";
-import { $, debounce, escapeHtml, normalizeUrl } from "./utils.js";
-
-const SEARCH_DEBOUNCE_MS = 200;
+import { $, escapeHtml, normalizeUrl } from "./utils.js";
 
 export function createUI({
   progressStore,
@@ -59,8 +57,13 @@ export function createUI({
     };
   }
 
-  function filterFeatures(features) {
+  // The search box only narrows the section list. Pass
+  // `{ includeSearch: false }` to apply just the County, Region and
+  // "Uncompleted only" filters, which is what the map uses.
+  function filterFeatures(features, { includeSearch = true } = {}) {
     const filters = getFilters();
+
+    if (!includeSearch) filters.search = "";
 
     return features.filter((feature) => {
       const properties = feature.properties || {};
@@ -464,21 +467,33 @@ export function createUI({
     );
   }
 
-  // Rebuilding the map on every keystroke is slow on phones, so the search
-  // box updates the list right away and waits for a pause in typing before
-  // updating the map. The other filters still apply immediately.
-  const searchFiltersChange = debounce(onFiltersChange, SEARCH_DEBOUNCE_MS);
+  // The search box only changes the list; the map always shows every
+  // section the other filters allow, so typing never redraws the map.
+  const searchInput = $("search");
+  const searchClear = $("searchClear");
 
-  $("search").addEventListener("input", () => {
+  // The × button shows only while there is something to clear.
+  function updateSearchClear() {
+    searchClear.hidden = searchInput.value === "";
+  }
+
+  searchInput.addEventListener("input", () => {
+    updateSearchClear();
     onSearchInput();
-    searchFiltersChange();
+  });
+
+  // Clears only the search text. County, Region and "Uncompleted only" are
+  // left as they are. Focus goes back to the search box so the visitor can
+  // type a new search straight away.
+  searchClear.addEventListener("click", () => {
+    searchInput.value = "";
+    updateSearchClear();
+    onSearchInput();
+    searchInput.focus();
   });
 
   for (const id of ["county", "region", "unfinished"]) {
-    $(id).addEventListener("change", () => {
-      searchFiltersChange.cancel();
-      onFiltersChange();
-    });
+    $(id).addEventListener("change", onFiltersChange);
   }
 
   $("closeSheet").onclick = onCloseDetails;

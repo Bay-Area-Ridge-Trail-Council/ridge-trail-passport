@@ -1078,3 +1078,135 @@ test("service worker: the basemap cache is separate from the app's files and sur
   const code = sw.split("\n").filter((line) => !line.trim().startsWith("//")).join("\n");
   assert.ok(!code.includes("openfreemap.org"), "no basemap address is written into sw.js code");
 });
+
+// A tiny stand-in for the page, just enough for createUI() to run in Node.
+function fakeSearchPage() {
+  const elements = new Map();
+
+  function element(id) {
+    if (!elements.has(id)) {
+      const listeners = {};
+      elements.set(id, {
+        id,
+        value: "",
+        checked: false,
+        hidden: false,
+        focused: false,
+        classList: { add() {}, remove() {}, toggle() {}, contains: () => false },
+        addEventListener(type, listener) {
+          (listeners[type] ||= []).push(listener);
+        },
+        dispatch(type) {
+          for (const listener of listeners[type] || []) listener({ type });
+        },
+        focus() { this.focused = true; }
+      });
+    }
+    return elements.get(id);
+  }
+
+  globalThis.window = {};
+  globalThis.document = { getElementById: element };
+  return element;
+}
+
+function searchTestFeatures() {
+  return [
+    makeFeature({ OBJECTID: 1, Section_Name: "Mount Tamalpais", County: "Marin", Region: "North Bay", Trail_Type: "Primary", Segment_ID: "A" }),
+    makeFeature({ OBJECTID: 2, Section_Name: "Mount Diablo", County: "Contra Costa", Region: "East Bay", Trail_Type: "Primary", Segment_ID: "B" }),
+    makeFeature({ OBJECTID: 3, Section_Name: "Skyline", County: "Marin", Region: "North Bay", Trail_Type: "Primary", Segment_ID: "C" })
+  ];
+}
+
+test("search narrows the list but never hides sections from the map; other filters still apply to both", async (t) => {
+  t.after(() => { delete globalThis.window; delete globalThis.document; });
+  const element = fakeSearchPage();
+  const { createUI } = await import("../src/ui.js");
+  const progressStore = createProgressStore(new MemoryStorage());
+  const ui = createUI({ progressStore });
+  const ids = (list) => list.map((feature) => feature.properties.OBJECTID);
+  const features = searchTestFeatures();
+
+  element("search").value = "mount";
+  assert.deepEqual(ids(ui.filterFeatures(features)), [1, 2]);
+  assert.deepEqual(ids(ui.filterFeatures(features, { includeSearch: false })), [1, 2, 3]);
+
+  // County is unchanged: it still narrows both the list and the map.
+  element("county").value = "Marin";
+  assert.deepEqual(ids(ui.filterFeatures(features)), [1]);
+  assert.deepEqual(ids(ui.filterFeatures(features, { includeSearch: false })), [1, 3]);
+
+  // The map is drawn from the search-free list.
+  const main = await (await import("node:fs/promises")).readFile(new URL("../src/main.js", import.meta.url), "utf8");
+  assert.match(main, /function visibleFeatures\(\) \{\s*return ui\.filterFeatures\(features, \{ includeSearch: false \}\);/);
+  assert.match(main, /const visible = visibleFeatures\(\);\s*ridgeMap\.render\(visible, selectedObjectId\);/);
+});
+
+test("typing in search updates the list only; County, Region and Uncompleted only update the map", async (t) => {
+  t.after(() => { delete globalThis.window; delete globalThis.document; });
+  const element = fakeSearchPage();
+  const { createUI } = await import("../src/ui.js");
+  const calls = [];
+  createUI({
+    progressStore: createProgressStore(new MemoryStorage()),
+    onSearchInput: () => calls.push("list"),
+    onFiltersChange: () => calls.push("filters")
+  });
+
+  element("search").value = "mount";
+  element("search").dispatch("input");
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  assert.deepEqual(calls, ["list"]);
+
+  for (const id of ["county", "region", "unfinished"]) element(id).dispatch("change");
+  assert.deepEqual(calls, ["list", "filters", "filters", "filters"]);
+});
+
+test("search clear button: shown only with a query, clears just the search, and returns focus", async (t) => {
+  t.after(() => { delete globalThis.window; delete globalThis.document; });
+  const element = fakeSearchPage();
+  const { createUI } = await import("../src/ui.js");
+  const calls = [];
+  createUI({
+    progressStore: createProgressStore(new MemoryStorage()),
+    onSearchInput: () => calls.push("list"),
+    onFiltersChange: () => calls.push("filters")
+  });
+  const search = element("search");
+  const clear = element("searchClear");
+
+  search.value = "mount";
+  search.dispatch("input");
+  assert.equal(clear.hidden, false);
+
+  element("county").value = "Marin";
+  element("region").value = "North Bay";
+  element("unfinished").checked = true;
+
+  clear.dispatch("click");
+  assert.equal(search.value, "");
+  assert.equal(clear.hidden, true);
+  assert.equal(search.focused, true);
+  assert.deepEqual(calls, ["list", "list"], "clearing refreshes the list and nothing else");
+  assert.equal(element("county").value, "Marin");
+  assert.equal(element("region").value, "North Bay");
+  assert.equal(element("unfinished").checked, true);
+
+  // Deleting the text by hand also hides the button.
+  search.value = "m";
+  search.dispatch("input");
+  search.value = "";
+  search.dispatch("input");
+  assert.equal(clear.hidden, true);
+});
+
+test("search clear button: labelled, a real button, starts hidden, and never covers typed text", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const read = (path) => readFile(new URL(path, import.meta.url), "utf8");
+  const [html, css] = await Promise.all([read("../index.html"), read("../src/styles.css")]);
+
+  assert.match(html, /<button id="searchClear" class="search-clear" type="button" aria-label="Clear search"[^>]* hidden>/);
+  assert.match(css, /\.search-field #search\{padding-right:42px\}/);
+  assert.match(css, /\.search-clear\{[^}]*right:4px;[^}]*width:32px;/);
+  assert.match(css, /#search::-webkit-search-cancel-button\{-webkit-appearance:none;appearance:none\}/);
+});
