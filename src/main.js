@@ -62,6 +62,7 @@ function selectFeature(feature, { fit = false } = {}) {
 
   renderAll();
   ui.scrollSelectedIntoView(selectedObjectId);
+  ui.dismissMapHint();
 
   // Measured now that the detail panel is showing this section, so the map
   // can keep the section out from under it.

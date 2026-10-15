@@ -6,6 +6,7 @@ import {
   milesFor,
   trailTypeLabel
 } from "./trails.js";
+import { isMapHintDismissed, saveMapHintDismissed } from "./map-hint.js";
 import { coveredEdges } from "./panel-offset.js";
 import { $, escapeHtml, normalizeUrl } from "./utils.js";
 
@@ -23,6 +24,11 @@ export function createUI({
   let statusTimer = null;
   let detailPhotoRequestId = 0;
   let detailPhotoObjectId = null;
+
+  // The map hint shows until the visitor first selects a section; after
+  // that it stays hidden, on later visits too (see map-hint.js).
+  let mapHintDismissed = isMapHintDismissed();
+  $("mapHint").classList.toggle("hide", mapHintDismissed);
 
   const prefersReducedMotion =
     window.matchMedia?.("(prefers-reduced-motion: reduce)").matches || false;
@@ -301,7 +307,7 @@ export function createUI({
       $("detailPhoto").hidden = true;
       $("detailPhoto").replaceChildren();
       $("sheet").classList.remove("open");
-      $("mapHint").classList.remove("hide");
+      $("mapHint").classList.toggle("hide", mapHintDismissed);
       return;
     }
 
@@ -453,6 +459,15 @@ export function createUI({
     });
   }
 
+  function dismissMapHint() {
+    if (mapHintDismissed) return;
+
+    mapHintDismissed = true;
+    $("mapHint").classList.add("hide");
+    // If this cannot be saved, the hint just shows again next visit.
+    saveMapHintDismissed();
+  }
+
   // How much of each map edge the open detail panel covers right now, in
   // pixels. Measured from the page every time, so it follows screen size,
   // orientation and text size.
@@ -539,6 +554,7 @@ export function createUI({
     renderList,
     renderDetails,
     coveredMapEdges,
+    dismissMapHint,
     renderLoadError,
     scrollSelectedIntoView
   };

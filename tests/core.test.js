@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import { CONFIG } from "../src/config.js";
 import { acknowledgeBetaNotice, isBetaNoticeAcknowledged } from "../src/beta-notice.js";
+import { isMapHintDismissed, saveMapHintDismissed } from "../src/map-hint.js";
 import { fetchTrailFeatures, uniqueValues, validateSegmentIds } from "../src/data.js";
 import { createProgressStore, ProgressNotSavedError } from "../src/progress.js";
 import {
@@ -1408,4 +1409,48 @@ test("phone tab bar is an accessible tab list with arrow-key navigation", async 
   }
   // The tabs do not use the old toggle's attributes.
   assert.ok(!/aria-expanded|aria-controls|aria-current/.test(source));
+});
+
+test("map hint: stays dismissed once saved, and shows when storage is unavailable", () => {
+  const storage = new MemoryStorage();
+
+  assert.equal(isMapHintDismissed(storage), false);
+  assert.equal(saveMapHintDismissed(storage), true);
+  assert.equal(isMapHintDismissed(storage), true);
+
+  // Fails open: no storage, blocked storage, or a failed save all mean the
+  // hint is shown.
+  assert.equal(isMapHintDismissed(null), false);
+  assert.equal(isMapHintDismissed({ getItem() { throw new Error("SecurityError"); } }), false);
+  const failing = new FailingStorage();
+  assert.equal(saveMapHintDismissed(failing), false);
+  assert.equal(isMapHintDismissed(failing), false);
+});
+
+test("map hint flag is kept apart from progress and left out of backups", () => {
+  const key = CONFIG.mapHint.storageKey;
+  assert.notEqual(key, CONFIG.storageKey);
+  assert.notEqual(key, CONFIG.betaNotice.storageKey);
+  assert.ok(!key.startsWith("segment-"));
+
+  const storage = new MemoryStorage();
+  const store = createProgressStore({ storage });
+  store.toggle({ Segment_ID: "RT-1", Trail_Type: "Primary" });
+  saveMapHintDismissed(storage);
+
+  const backup = store.exportData();
+  assert.deepEqual(backup.completed.map((entry) => entry.segmentId), ["RT-1"]);
+  assert.ok(!JSON.stringify(backup).includes(key));
+});
+
+test("map hint is dismissed by selecting a section, not by closing one", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const read = (path) => readFile(new URL(path, import.meta.url), "utf8");
+  const [main, ui] = await Promise.all([read("../src/main.js"), read("../src/ui.js")]);
+  const select = main.slice(main.indexOf("function selectFeature("), main.indexOf("function clearSelection("));
+
+  assert.match(select, /renderAll\(\);[\s\S]*ui\.dismissMapHint\(\);/);
+  // With nothing selected the hint comes back only if it was never dismissed.
+  assert.match(ui, /\$\("mapHint"\)\.classList\.toggle\("hide", mapHintDismissed\);/);
+  assert.ok(!/\$\("mapHint"\)\.classList\.remove\("hide"\)/.test(ui));
 });
