@@ -33,6 +33,8 @@ export const CONFIG = {
   // curves visibly step-shaped at maximum zoom, so do not go lower than 6.
   geometryPrecision: 6,
 
+  // How long to wait for a section photo before giving up. The trail data
+  // itself has no time limit (see fetchTrailFeatures in data.js).
   requestTimeoutMs: 15000,
 
   // The basemap is a MapLibre vector style. Changing tile provider means

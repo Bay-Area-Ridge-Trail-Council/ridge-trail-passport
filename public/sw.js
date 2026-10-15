@@ -19,7 +19,11 @@ const BUILD_ASSETS = /* build:assets */ [] /* end */;
 
 const CACHE_PREFIX = "ridge-trail-passport-shell-";
 const CACHE_NAME = `${CACHE_PREFIX}${BUILD_ID}`;
-const CORE_ASSETS = [
+// Not needed to open the Passport offline, so not cached during install,
+// where they would compete with the trail data on a slow connection (about
+// 140 kB). The page asks for them once the trail data has loaded and the
+// browser is idle (see requestOfflineExtras in src/offline.js).
+const EXTRA_ASSETS = [
   "./manifest.webmanifest",
   "./ridge-trail-logo.png",
   "./ridge-trail-app-icon-180.png",
@@ -51,18 +55,32 @@ async function cacheAppShell() {
     throw new Error("Passport page is from a different build");
   }
   await cache.put("./", pageResponse);
+}
+
+// Adds whichever EXTRA_ASSETS this build's cache doesn't have yet, so after
+// the first visit (and the first after each deploy) nothing is downloaded.
+async function cacheExtras() {
+  const cache = await caches.open(CACHE_NAME);
 
   await Promise.all(
-    CORE_ASSETS.map(async (path) => {
+    EXTRA_ASSETS.map(async (path) => {
+      if (await cache.match(path)) return;
+
       try {
-        const response = await fetch(path, { cache: "no-store" });
+        // "no-cache" checks with the server but reuses the browser's copy
+        // (such as the logo the page just showed) if it hasn't changed.
+        const response = await fetch(path, { cache: "no-cache" });
         if (response.ok) await cache.put(path, response);
       } catch {
-        // A nonessential shell asset should not block service-worker install.
+        // Nonessential; tried again on the next visit.
       }
     })
   );
 }
+
+self.addEventListener("message", (event) => {
+  if (event.data === "cache-extras") event.waitUntil(cacheExtras());
+});
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
