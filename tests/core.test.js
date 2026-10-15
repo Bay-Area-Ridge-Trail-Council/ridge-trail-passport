@@ -14,6 +14,7 @@ import {
 } from "../src/trails.js";
 import { coveredEdges, panOffset } from "../src/panel-offset.js";
 import { debounce, normalizeUrl } from "../src/utils.js";
+import { carryOverAppLayers } from "../src/style-swap.js";
 
 class MemoryStorage {
   constructor() { this.values = new Map(); }
@@ -809,4 +810,65 @@ test("service worker install caches only what the app needs offline; the logo an
   // Asking again (every visit) does not download them again.
   await run("message", "cache-extras");
   assert.equal(fetched.length, 1 + extras.length);
+});
+
+// The map starts on a plain style with the trail drawn, then swaps in the
+// basemap. These are the style objects MapLibre hands to transformStyle.
+function plainStyleWithTrail() {
+  return {
+    version: 8,
+    sources: {
+      "ridge-trail": { type: "geojson", data: { type: "FeatureCollection", features: [] } },
+      "my-location": { type: "geojson", data: { type: "FeatureCollection", features: [] } }
+    },
+    layers: [
+      { id: "fallback-background", type: "background" },
+      { id: "ridge-trail-selected-highlight", type: "line", source: "ridge-trail" },
+      { id: "ridge-trail-side", type: "line", source: "ridge-trail" },
+      { id: "ridge-trail-main", type: "line", source: "ridge-trail" },
+      { id: "my-location", type: "circle", source: "my-location" }
+    ]
+  };
+}
+
+function basemapStyle() {
+  return {
+    version: 8,
+    sources: { openmaptiles: { type: "vector", url: "https://example.org/tiles.json" } },
+    layers: [
+      { id: "background", type: "background" },
+      { id: "roads", type: "line", source: "openmaptiles" }
+    ]
+  };
+}
+
+test("swapping in the basemap keeps the trail layers, drawn on top", () => {
+  const previous = plainStyleWithTrail();
+  const result = carryOverAppLayers(previous, basemapStyle(), ["ridge-trail", "my-location"]);
+
+  assert.deepEqual(result.layers.map((layer) => layer.id), [
+    "background",
+    "roads",
+    "ridge-trail-selected-highlight",
+    "ridge-trail-side",
+    "ridge-trail-main",
+    "my-location"
+  ]);
+  assert.equal(result.sources["ridge-trail"], previous.sources["ridge-trail"], "trail data is carried over as is");
+  assert.ok(result.sources["my-location"]);
+  assert.ok(result.sources.openmaptiles, "basemap sources are kept");
+});
+
+test("carrying the trail layers over twice never duplicates them", () => {
+  const appSources = ["ridge-trail", "my-location"];
+  const once = carryOverAppLayers(plainStyleWithTrail(), basemapStyle(), appSources);
+  const twice = carryOverAppLayers(once, once, appSources);
+
+  assert.deepEqual(twice.layers.map((layer) => layer.id), once.layers.map((layer) => layer.id));
+  assert.deepEqual(Object.keys(twice.sources).sort(), Object.keys(once.sources).sort());
+});
+
+test("with no current style, the basemap style is used unchanged", () => {
+  const next = basemapStyle();
+  assert.equal(carryOverAppLayers(undefined, next, ["ridge-trail"]), next);
 });
