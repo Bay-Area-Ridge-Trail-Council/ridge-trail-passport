@@ -63,13 +63,17 @@ export function createUI({
     };
   }
 
-  // The search box only narrows the section list. Pass
-  // `{ includeSearch: false }` to apply just the County, Region and
-  // "Uncompleted only" filters, which is what the map uses.
-  function filterFeatures(features, { includeSearch = true } = {}) {
+  // The search box and "Uncompleted only" only narrow the section list.
+  // Pass `{ includeSearch: false, includeUncompletedOnly: false }` to apply
+  // just the County and Region filters, which is what the map uses.
+  function filterFeatures(
+    features,
+    { includeSearch = true, includeUncompletedOnly = true } = {}
+  ) {
     const filters = getFilters();
 
     if (!includeSearch) filters.search = "";
+    if (!includeUncompletedOnly) filters.uncompletedOnly = false;
 
     return features.filter((feature) => {
       const properties = feature.properties || {};
