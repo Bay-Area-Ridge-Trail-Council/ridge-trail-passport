@@ -9,6 +9,7 @@ import { createRidgeMap } from "./map.js";
 import {
   readCachedTrailFeatures,
   registerServiceWorker,
+  requestOfflineExtras,
   sameTrailSnapshot,
   writeCachedTrailFeatures
 } from "./offline.js";
@@ -588,6 +589,7 @@ async function initialize() {
     showQaWarning: true
   });
 
+  requestOfflineExtras();
   initializeBackgroundRefresh();
 }
 

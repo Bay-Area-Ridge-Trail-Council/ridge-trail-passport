@@ -13,6 +13,35 @@
   <link rel="apple-touch-icon" sizes="180x180" href="./ridge-trail-app-icon-180.png" />
   <link rel="manifest" href="./manifest.webmanifest" />
   <title>Ridge Trail Passport</title>
+  <!-- Open connections to the trail data and basemap servers right away.
+       The addresses are filled in from src/config.js when the page is served
+       or built (see fillStartupAddresses in vite.config.js). -->
+  <link rel="preconnect" href="%TRAIL_DATA_ORIGIN%" crossorigin />
+  <link rel="preconnect" href="%BASEMAP_ORIGIN%" crossorigin />
+  <!-- Content-Security-Policy: if a CSP is added later (it is in the
+       backlog), this inline script and the beta notice script below each
+       need a nonce or a hash in script-src, or the browser will block them. -->
+  <script>
+    // Start downloading the trail sections now, instead of waiting for the
+    // app's code to download first. src/data.js picks this request up
+    // (takeEarlyTrailRequest). If this script is removed or fails, the app
+    // makes the request itself, just later. The address is filled in from
+    // src/config.js (see fillStartupAddresses in vite.config.js).
+    (function () {
+      var url = /* trail-query-url */ "" /* end */;
+      if (!url || !window.fetch) return;
+
+      try {
+        var request = fetch(url);
+        // The app reports failures itself; this keeps the console quiet if
+        // the request fails before the app is ready to look at it.
+        request.catch(function () {});
+        window.__sectionsPromise = request;
+      } catch (error) {
+        // Leave it to the app.
+      }
+    })();
+  </script>
   <script>
     // Decide before the page first appears whether the beta notice is needed,
     // so returning visitors never see it flash and new visitors never see the

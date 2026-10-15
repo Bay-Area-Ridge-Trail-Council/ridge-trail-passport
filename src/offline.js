@@ -96,3 +96,30 @@ export function registerServiceWorker() {
     });
   });
 }
+
+// Asks the service worker to save the logo and app icons for offline use
+// (see EXTRA_ASSETS in public/sw.js). Called once the trail data has loaded,
+// and waits until the page has finished loading and the browser is idle, so
+// on a slow connection these never compete with the trail data.
+export function requestOfflineExtras() {
+  if (!("serviceWorker" in navigator)) return;
+
+  const ask = () =>
+    navigator.serviceWorker.ready
+      .then((registration) => registration.active?.postMessage("cache-extras"))
+      .catch(() => {});
+
+  const whenIdle = () => {
+    if ("requestIdleCallback" in window) {
+      window.requestIdleCallback(ask, { timeout: 5000 });
+    } else {
+      window.setTimeout(ask, 1000);
+    }
+  };
+
+  if (document.readyState === "complete") {
+    whenIdle();
+  } else {
+    window.addEventListener("load", whenIdle, { once: true });
+  }
+}

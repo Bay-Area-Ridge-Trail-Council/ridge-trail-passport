@@ -675,3 +675,138 @@ test("service worker: hashed files are cache-first, the list is only filled in a
   // Other sites (tiles, basemap style, ArcGIS, photos) are still never touched.
   assert.ok(sw.includes("if (url.origin !== self.location.origin) return;"));
 });
+
+test("a slow trail response is still used, not thrown away as a timeout", async (t) => {
+  globalThis.window ??= globalThis;
+  window.__sectionsPromise = undefined;
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+
+  // Answers after 40 seconds, like ArcGIS on a very slow connection. Stops
+  // early only if the app cancels the request.
+  t.mock.method(globalThis, "fetch", (_url, options = {}) =>
+    new Promise((resolve, reject) => {
+      setTimeout(() => resolve({
+        ok: true,
+        json: async () => ({ type: "FeatureCollection", features: [makeFeature({ OBJECTID: 1 })] })
+      }), 40000);
+      options.signal?.addEventListener("abort", () =>
+        reject(Object.assign(new Error("aborted"), { name: "AbortError" }))
+      );
+    })
+  );
+
+  const result = fetchTrailFeatures();
+  t.mock.timers.tick(40000);
+  const features = await result;
+
+  assert.equal(features.length, 1);
+});
+
+test("the trail request started by index.html is used once, then the app asks again itself", async (t) => {
+  globalThis.window ??= globalThis;
+  const requested = [];
+  const response = (id) => ({
+    ok: true,
+    json: async () => ({ type: "FeatureCollection", features: [makeFeature({ OBJECTID: id })] })
+  });
+  t.mock.method(globalThis, "fetch", async (url) => {
+    requested.push(new URL(url));
+    return response(2);
+  });
+
+  window.__sectionsPromise = Promise.resolve(response(1));
+  const first = await fetchTrailFeatures();
+  assert.equal(first[0].properties.OBJECTID, 1);
+  assert.equal(requested.length, 0, "the early request is used instead of a second one");
+
+  // Later refreshes (coming back online, reopening the app) ask ArcGIS afresh.
+  const second = await fetchTrailFeatures();
+  assert.equal(second[0].properties.OBJECTID, 2);
+  assert.equal(requested.length, 1);
+
+  // Without the early request (script removed or failed), the app asks itself.
+  window.__sectionsPromise = undefined;
+  await fetchTrailFeatures();
+  assert.equal(requested.length, 2);
+});
+
+test("a failed early trail request is reported as a failure", async (t) => {
+  globalThis.window ??= globalThis;
+  t.mock.method(globalThis, "fetch", async () => assert.fail("should not ask again"));
+
+  window.__sectionsPromise = Promise.resolve({ ok: false, status: 503, json: async () => ({}) });
+  await assert.rejects(fetchTrailFeatures(), /HTTP 503/);
+});
+
+test("index.html starts the trail request early, using the address from config.js", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const { fillStartupAddresses } = await import("../vite.config.js");
+  const { trailQueryUrl } = await import("../src/data.js");
+  const source = await readFile(new URL("../index.html", import.meta.url), "utf8");
+
+  // The address is written down once, in config.js, not in index.html.
+  assert.ok(!source.includes("arcgis.com"));
+  assert.ok(!source.includes("openfreemap.org"));
+
+  const html = fillStartupAddresses(source);
+  const head = html.slice(0, html.indexOf("</head>"));
+  const script = head.indexOf("window.__sectionsPromise");
+
+  assert.ok(script > 0, "the early request is in <head>");
+  assert.ok(head.includes(JSON.stringify(trailQueryUrl())), "it asks for exactly what data.js would");
+
+  for (const address of [CONFIG.featureService, CONFIG.basemap.styleUrl]) {
+    const link = `<link rel="preconnect" href="${new URL(address).origin}" crossorigin />`;
+    assert.ok(head.includes(link), `${link} is in <head>`);
+    assert.ok(head.indexOf(link) < script, "preconnect comes before the early request");
+  }
+
+  // A future Content-Security-Policy would block inline scripts without this.
+  assert.match(source, /Content-Security-Policy[\s\S]*nonce[\s\S]*hash/);
+});
+
+test("service worker install caches only what the app needs offline; the logo and icons wait until asked", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const source = await readFile(new URL("../public/sw.js", import.meta.url), "utf8");
+
+  const listeners = {};
+  const fetched = [];
+  const cached = new Map();
+  const cache = {
+    addAll: async () => {},
+    put: async (key, value) => { cached.set(String(key), value); },
+    match: async (key) => cached.get(String(key))
+  };
+  const fakeSelf = {
+    registration: { scope: "https://example.org/" },
+    location: { origin: "https://example.org" },
+    addEventListener: (type, listener) => { listeners[type] = listener; },
+    skipWaiting: async () => {},
+    clients: { claim: async () => {} }
+  };
+  const fakeCaches = { open: async () => cache, delete: async () => true, keys: async () => [] };
+  const fakeFetch = async (path) => {
+    fetched.push(String(path));
+    return new Response("<!doctype html>", { status: 200 });
+  };
+  new Function("self", "caches", "fetch", source)(fakeSelf, fakeCaches, fakeFetch);
+
+  const run = async (type, data) => {
+    let work;
+    listeners[type]({ data, waitUntil: (promise) => { work = promise; } });
+    await work;
+  };
+
+  await run("install");
+  assert.deepEqual(fetched, ["./"], "install fetches only the page (plus the build's own files)");
+
+  const extras = ["./manifest.webmanifest", "./ridge-trail-logo.png", "./ridge-trail-app-icon-180.png",
+    "./ridge-trail-app-icon-192.png", "./ridge-trail-app-icon-512.png"];
+  await run("message", "cache-extras");
+  assert.deepEqual(fetched.slice(1).sort(), [...extras].sort());
+  for (const path of extras) assert.ok(cached.has(path), `${path} is saved for offline use`);
+
+  // Asking again (every visit) does not download them again.
+  await run("message", "cache-extras");
+  assert.equal(fetched.length, 1 + extras.length);
+});

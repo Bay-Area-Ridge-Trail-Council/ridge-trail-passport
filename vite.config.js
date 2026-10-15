@@ -2,6 +2,8 @@ import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { defineConfig } from "vite";
+import { CONFIG } from "./src/config.js";
+import { trailQueryUrl } from "./src/data.js";
 
 // Vite's hashed output: assets/<name>-<8 character hash>.js or .css.
 // Must match HASHED_ASSET in public/sw.js.
@@ -46,9 +48,34 @@ function serviceWorkerFileList() {
   };
 }
 
+// Fills in the web addresses that index.html uses before the app's own code
+// has downloaded: the trail data request and the two preconnect links. They
+// come from src/config.js, so each address is still written down only once
+// and changing the basemap stays a one-line edit there.
+export function fillStartupAddresses(html) {
+  const filled = html
+    .replace(/\/\* trail-query-url \*\/.*?\/\* end \*\//, JSON.stringify(trailQueryUrl()))
+    .replaceAll("%TRAIL_DATA_ORIGIN%", new URL(CONFIG.featureService).origin)
+    .replaceAll("%BASEMAP_ORIGIN%", new URL(CONFIG.basemap.styleUrl).origin);
+
+  // Fail rather than ship a page that asks for a placeholder.
+  if (/trail-query-url|%TRAIL_DATA_ORIGIN%|%BASEMAP_ORIGIN%/.test(filled)) {
+    throw new Error("Could not fill in the startup addresses in index.html");
+  }
+
+  return filled;
+}
+
+function startupAddresses() {
+  return {
+    name: "startup-addresses",
+    transformIndexHtml: { order: "pre", handler: fillStartupAddresses }
+  };
+}
+
 export default defineConfig({
   base: "./",
-  plugins: [serviceWorkerFileList()],
+  plugins: [startupAddresses(), serviceWorkerFileList()],
   server: {
     host: true
   },

@@ -2,7 +2,9 @@ import { CONFIG } from "./config.js";
 
 const attachmentCache = new Map();
 
-function buildQueryUrl() {
+// The trail data request. vite.config.js also writes this address into
+// index.html, so the page can start the download before this file arrives.
+export function trailQueryUrl() {
   const params = new URLSearchParams({
     where: "1=1",
     outFields: CONFIG.featureFields.join(","),
@@ -15,6 +17,15 @@ function buildQueryUrl() {
   return `${CONFIG.featureService}/query?${params.toString()}`;
 }
 
+async function readJson(response, label) {
+  if (!response.ok) {
+    throw new Error(`${label} returned HTTP ${response.status}`);
+  }
+
+  return response.json();
+}
+
+// Gives up after CONFIG.requestTimeoutMs. Used for section photos only.
 async function fetchJson(url, label) {
   const controller = new AbortController();
   const timer = window.setTimeout(
@@ -24,12 +35,7 @@ async function fetchJson(url, label) {
 
   try {
     const response = await fetch(url, { signal: controller.signal });
-
-    if (!response.ok) {
-      throw new Error(`${label} returned HTTP ${response.status}`);
-    }
-
-    return await response.json();
+    return await readJson(response, label);
   } catch (error) {
     if (error?.name === "AbortError") {
       throw new Error(`${label} timed out. Please try again.`);
@@ -47,8 +53,23 @@ function arcGisErrorMessage(data, fallback) {
   return data.error.message || fallback;
 }
 
+// The script at the top of index.html starts the trail request as soon as the
+// page opens and leaves it in window.__sectionsPromise. The first load uses
+// that request; every later refresh asks ArcGIS again. If the script is
+// missing or did not run, the app simply asks itself.
+function takeEarlyTrailRequest() {
+  const request = window.__sectionsPromise;
+  window.__sectionsPromise = undefined;
+  return request || null;
+}
+
+// No time limit: on a slow connection the trail data can take well over 15
+// seconds, and an answer that arrives late is still the right answer. Only a
+// real failure (no connection, an error status, an unreadable reply) is
+// reported as one.
 export async function fetchTrailFeatures() {
-  const data = await fetchJson(buildQueryUrl(), "Feature service");
+  const response = await (takeEarlyTrailRequest() || fetch(trailQueryUrl()));
+  const data = await readJson(response, "Feature service");
   const arcGisError = arcGisErrorMessage(
     data,
     "The feature service returned an ArcGIS error."
