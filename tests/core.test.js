@@ -1299,12 +1299,12 @@ test("phone layout keeps the map sized and draws the tab bar as specified", asyn
   assert.match(phone, /--tab-bar-height:calc\(56px \+ env\(safe-area-inset-bottom\)\)/);
   const bar = rule(".tab-bar");
   assert.match(bar, /padding-bottom:env\(safe-area-inset-bottom\)/);
-  assert.match(bar, /background:var\(--paper\)/);
+  assert.match(bar, /background:var\(--panel\)/);
   assert.match(bar, /border-top:1px solid var\(--line\)/);
   assert.ok(!/box-shadow/.test(bar));
   assert.match(
     phone,
-    /@supports \(\(-webkit-backdrop-filter:blur\(20px\)\) or \(backdrop-filter:blur\(20px\)\)\)\{\s*\.tab-bar\{background:rgba\(255,255,255,\.9[2-5]\);-webkit-backdrop-filter:blur\(20px\);backdrop-filter:blur\(20px\)\}/
+    /@supports \(\(-webkit-backdrop-filter:blur\(20px\)\) or \(backdrop-filter:blur\(20px\)\)\)\{\s*\.tab-bar\{background:color-mix\(in srgb,var\(--panel\) 93%,transparent\);-webkit-backdrop-filter:blur\(20px\);backdrop-filter:blur\(20px\)\}/
   );
 
   // Equal-width, full-height tabs; active state is never color alone.
@@ -1353,10 +1353,10 @@ test("phone Map tab has a slim one-row header styled like the tab bar", async ()
   const rule = phone.match(/\.map-header\{([^}]*)\}/)[1];
   assert.match(rule, /height:var\(--map-header-height\)/);
   assert.match(rule, /padding:env\(safe-area-inset-top\)/);
-  assert.match(rule, /background:var\(--paper\);border-bottom:1px solid var\(--line\)/);
+  assert.match(rule, /background:var\(--panel\);border-bottom:1px solid var\(--line\)/);
   assert.ok(!/box-shadow/.test(rule));
-  assert.match(phone, /\.map-header\{background:rgba\(255,255,255,\.93\);-webkit-backdrop-filter:blur\(20px\);backdrop-filter:blur\(20px\)\}/);
-  assert.match(phone, /\.map-header::before\{[^}]*position:fixed;top:0;[^}]*height:env\(safe-area-inset-top\);background:var\(--paper\)\}/);
+  assert.match(phone, /\.map-header\{background:color-mix\(in srgb,var\(--panel\) 93%,transparent\);-webkit-backdrop-filter:blur\(20px\);backdrop-filter:blur\(20px\)\}/);
+  assert.match(phone, /\.map-header::before\{[^}]*position:fixed;top:0;[^}]*height:env\(safe-area-inset-top\);background:var\(--panel\)\}/);
 
   // The map area starts below the header, as it ends above the tab bar.
   assert.match(phone, /\.map-wrap\{position:absolute;top:var\(--map-header-height\);[^}]*bottom:var\(--tab-bar-height\)/);
@@ -1366,6 +1366,42 @@ test("phone Map tab has a slim one-row header styled like the tab bar", async ()
   assert.match(covered, /const header = \$\("mapHeader"\);/);
   assert.match(covered, /headerShowing \? header\.getBoundingClientRect\(\) : null/);
   assert.ok(!/aside/.test(covered.replace(/\/\/.*$/gm, "")));
+});
+
+test("phone surfaces and the browser theme color all use the page background color", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const read = (path) => readFile(new URL(path, import.meta.url), "utf8");
+  const [html, styles, mobile, help] = await Promise.all([
+    read("../index.html"),
+    read("../src/styles.css"),
+    read("../src/mobile-panel.css"),
+    read("../src/help.css")
+  ]);
+  const phoneOf = (css) => css.slice(css.indexOf("@media (max-width:800px){"));
+  const phone = phoneOf(mobile).slice(0, phoneOf(mobile).indexOf("@media (max-width:520px)"));
+  const rule = (css, selector) => {
+    const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const match = css.match(new RegExp(`(?:^|[}\\s])${escaped}\\{([^}]*)\\}`));
+    assert.ok(match, `missing rule ${selector}`);
+    return match[1];
+  };
+
+  // The page background is --panel, and it is the off-white #F3F8FA.
+  assert.match(styles, /--panel:#F3F8FA;/);
+  assert.match(rule(styles, "html,body"), /background:var\(--panel\)/);
+
+  // Every phone surface uses it, with an opaque fallback where see-through.
+  for (const selector of [".map-header", ".map-header::before", ".tab-bar", ".sheet", ".map-hint"]) {
+    assert.match(rule(phone, selector), /background:var\(--panel\)/, selector);
+  }
+  assert.match(rule(phone, ".map-hint"), /background:var\(--panel\);background:color-mix\(in srgb,var\(--panel\) 96%,transparent\)/);
+  assert.match(rule(phoneOf(help), ".help-panel"), /background:var\(--panel\)/);
+  // The Help close button keeps a visible circle on the off-white panel.
+  assert.match(rule(phoneOf(help), ".help-close"), /background:var\(--line\)/);
+  assert.ok(!/255,255,255/.test(phone.match(/\.(map-header|tab-bar)\{background:[^;]*/g).join()));
+
+  // The browser's own toolbar color matches (a meta tag cannot read --panel).
+  assert.match(html, /<meta name="theme-color" content="#F3F8FA" \/>/);
 });
 
 test("zoom framing with the phone header above the map: sheet below, nothing on top", () => {
