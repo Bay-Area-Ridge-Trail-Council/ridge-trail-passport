@@ -120,5 +120,13 @@ Node version is pinned in `.node-version`.
   This is why the install flow matters and why storage failures must be visible.
 - The repository is owned by the Bay Area Ridge Trail Council organization
   account on GitHub.
+- The phone/desktop breakpoint (phones at 800px and below, desktop at 801px
+  and above) is written out by hand in eight places across five files, and
+  they must all be changed together:
+  `src/mobile-panel.css` (1), `src/desktop.css` (3), `src/help.css` (2),
+  `src/detail-photo.css` (1), and `src/map.js` (1, a `matchMedia` query).
+  CSS media queries cannot read a shared variable, so this cannot be put in
+  one place without adding a build step. `src/tab-bar.js` deliberately does
+  not repeat it: it checks whether the tab bar is displayed instead.
 - Ridge Trail names and logos are Council property and are separate from the
   source code. Do not add, alter, or remove branding assets.
