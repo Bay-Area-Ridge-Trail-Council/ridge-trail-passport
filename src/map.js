@@ -15,6 +15,7 @@ import {
   isCompletionEligible
 } from "./trails.js";
 import { panOffset } from "./panel-offset.js";
+import { carryOverAppLayers } from "./style-swap.js";
 
 // MapLibre does its tile work in a background worker. Vite bundles that
 // worker as its own file; this tells MapLibre where to find it.
@@ -41,8 +42,10 @@ const MOUSE_TOLERANCE_PX = 3;
 const TRAIL_TILE_MAXZOOM = 16;
 const TRAIL_SIMPLIFY_TOLERANCE_PX = 1;
 
-// Shown instead of the basemap if its style cannot be loaded (for example
-// offline), so the trail still draws. Matches Leaflet's grey background.
+// The map starts on this plain style, which needs nothing from the network,
+// so the trail can be drawn at once. The basemap replaces it when it arrives
+// (see "Basemap" below). If the basemap never arrives (for example offline),
+// the trail stays on this. Matches Leaflet's grey background.
 const FALLBACK_STYLE = {
   version: 8,
   sources: {},
@@ -84,7 +87,7 @@ export function createRidgeMap({ onSelect, onBlankMapClick, isDone }) {
   try {
     map = new MapLibreMap({
       container: "map",
-      style: CONFIG.basemap.styleUrl,
+      style: FALLBACK_STYLE,
       center: CONFIG.initialMap.center,
       zoom: CONFIG.initialMap.zoom,
       maxZoom: CONFIG.basemap.maxZoom,
@@ -151,27 +154,16 @@ export function createRidgeMap({ onSelect, onBlankMapClick, isDone }) {
     if (!document.hidden) refreshMapSize();
   });
 
-  // --- Basemap fallback ---------------------------------------------------
+  // --- Basemap error -------------------------------------------------------
 
-  let styleHasLoaded = false;
-  let usingFallbackStyle = false;
+  // Set once the basemap's style has arrived (see "Basemap" below).
+  let basemapArrived = false;
 
-  function useFallbackStyle(reason) {
-    if (styleHasLoaded || usingFallbackStyle) return;
-
-    usingFallbackStyle = true;
-    console.warn("Basemap unavailable; showing trail without it.", reason);
-    map.setStyle(FALLBACK_STYLE);
-  }
-
-  const styleTimeout = window.setTimeout(
-    () => useFallbackStyle("timed out"),
-    CONFIG.requestTimeoutMs
-  );
-
+  // If the basemap cannot be loaded, the map just stays on the plain style,
+  // with the trail already drawn on it. There is nothing to wait for.
   map.on("error", (event) => {
-    if (!styleHasLoaded) {
-      useFallbackStyle(event.error);
+    if (!basemapArrived) {
+      console.warn("Basemap unavailable; showing trail without it.", event.error);
     }
   });
 
@@ -186,10 +178,10 @@ export function createRidgeMap({ onSelect, onBlankMapClick, isDone }) {
   let endpointMarkerSize = null;
   let endpointFeatures = null;
 
-  // --- Layers (set up once per style load) ----------------------------------
+  // --- Layers (set up once, on the plain starting style) --------------------
 
-  // Runs on the first style load and again if the fallback style replaces
-  // the basemap, because changing style removes the app's own layers.
+  // Runs once, as soon as the plain starting style is ready. The basemap
+  // swap below carries these layers over rather than adding them again.
   function addAppLayers() {
     map.addSource(TRAIL_SOURCE, {
       type: "geojson",
@@ -276,10 +268,47 @@ export function createRidgeMap({ onSelect, onBlankMapClick, isDone }) {
     applyRender();
   }
 
+  // --- Basemap -------------------------------------------------------------
+
+  // The trail never waits for the basemap. The plain starting style is ready
+  // within a frame; the trail is drawn on it, and then the basemap is asked
+  // for. MapLibre keeps showing the plain style (with the trail) while the
+  // basemap's style file downloads, then swaps the basemap in underneath.
+  //
+  // Changing style normally removes the app's own sources and layers.
+  // transformStyle is MapLibre's way to keep them: it is given the current
+  // style and the new one, and carryOverAppLayers copies the trail and
+  // location sources and layers into the new one, on top of the basemap.
+  //
+  // MapLibre does the swap in one of two ways. Usually it changes only what
+  // differs, so the trail source is left untouched and nothing more is
+  // needed. If it instead rebuilds the map from scratch, "style.load" fires
+  // again; the selected and completed colours are then put back below.
+  let basemapRequested = false;
+
   map.on("style.load", () => {
-    styleHasLoaded = true;
-    window.clearTimeout(styleTimeout);
-    addAppLayers();
+    if (!map.getSource(TRAIL_SOURCE)) {
+      addAppLayers();
+    } else {
+      // Rebuilt with the carried-over layers. Re-send the latest trail and
+      // location data and the per-section colours, which a rebuild clears.
+      sourceFeatures = null;
+      applyRender();
+      map.getSource(LOCATION_SOURCE)?.setData(locationData);
+    }
+
+    if (!basemapRequested) {
+      basemapRequested = true;
+      map.setStyle(CONFIG.basemap.styleUrl, {
+        transformStyle: (previousStyle, nextStyle) => {
+          basemapArrived = true;
+          return carryOverAppLayers(previousStyle, nextStyle, [
+            TRAIL_SOURCE,
+            LOCATION_SOURCE
+          ]);
+        }
+      });
+    }
   });
 
   // --- Rendering ------------------------------------------------------------
