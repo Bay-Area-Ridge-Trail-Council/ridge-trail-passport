@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import { CONFIG } from "../src/config.js";
 import { acknowledgeBetaNotice, isBetaNoticeAcknowledged } from "../src/beta-notice.js";
+import { isMapHintDismissed, saveMapHintDismissed } from "../src/map-hint.js";
 import { fetchTrailFeatures, uniqueValues, validateSegmentIds } from "../src/data.js";
 import { createProgressStore, ProgressNotSavedError } from "../src/progress.js";
 import {
@@ -1209,4 +1210,247 @@ test("search clear button: labelled, a real button, starts hidden, and never cov
   assert.match(css, /\.search-field #search\{padding-right:42px\}/);
   assert.match(css, /\.search-clear\{[^}]*right:4px;[^}]*width:32px;/);
   assert.match(css, /#search::-webkit-search-cancel-button\{-webkit-appearance:none;appearance:none\}/);
+});
+
+test("phone tab bar: tabs come from one list, Map first and shown by default", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const { TABS, DEFAULT_TAB } = await import("../src/tab-bar.js");
+  const html = await readFile(new URL("../index.html", import.meta.url), "utf8");
+
+  assert.deepEqual(TABS.map((tab) => tab.id), ["map", "sections"]);
+  assert.deepEqual(TABS.map((tab) => tab.label), ["Map", "Sections"]);
+  assert.equal(DEFAULT_TAB, "map");
+
+  // The Map tab shows the map itself; every other tab names content in
+  // index.html that is marked as a tab panel.
+  assert.equal(TABS[0].panel, null);
+  for (const tab of TABS.slice(1)) {
+    assert.match(html, new RegExp(`id="${tab.panel}" data-tab-panel`));
+  }
+  assert.match(html, /<aside id="sectionsPanel" data-tab-panel>/);
+  assert.match(html, /<nav class="tab-bar" id="tabBar" aria-label="Main"><\/nav>/);
+
+  // The detail sheet can take focus after a section is tapped in the list.
+  assert.match(html, /<section class="sheet" id="sheet" aria-labelledby="sheetTitle" tabindex="-1">/);
+
+  // Every icon has a part that fills in when its tab is active.
+  for (const tab of TABS) assert.match(tab.icon, /class="tab-icon-shape"/);
+
+  // The old toggle stays in the page (so the change can be undone) but hidden.
+  assert.match(html, /id="mobilePanelToggle"/);
+  assert.match(html, /<div id="mobileBrowserContent">/);
+});
+
+test("tapping a section in the list switches to the Map tab before selecting it", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const main = await readFile(new URL("../src/main.js", import.meta.url), "utf8");
+
+  // selectFeature measures the screen straight away, so the map must be
+  // showing first.
+  const fromList = main.slice(
+    main.indexOf("function selectFeatureFromList("),
+    main.indexOf("function initializeHelpPanel(")
+  );
+  assert.match(
+    fromList,
+    /\{\s*tabBar\?\.showTab\("map", \{ moveFocus: false \}\);\s*selectFeature\(feature, options\);/
+  );
+  // Then, on phones only, focus goes to the detail sheet; the search text is
+  // not touched.
+  assert.match(fromList, /if \(tabBar\?\.isShowing\(\)\) \$\("sheet"\)\.focus\(\{ preventScroll: true \}\);/);
+  assert.ok(!/search/i.test(fromList.replace(/\/\/.*$/gm, "")));
+  assert.match(main, /onSelect: selectFeatureFromList,/);
+  // Map taps already happen on the Map tab.
+  assert.match(main, /createRidgeMap\(\{\s*onSelect: selectFeature,/);
+
+  // Home also returns to the Map tab; the old dropdown class is gone.
+  const goHome = main.slice(main.indexOf("function goHome()"), main.indexOf("function toggleComplete("));
+  assert.match(goHome, /tabBar\?\.showTab\("map"\);/);
+  assert.ok(!main.includes("mobile-panel-open"));
+});
+
+test("phone layout keeps the map sized and draws the tab bar as specified", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const css = await readFile(new URL("../src/mobile-panel.css", import.meta.url), "utf8");
+  const phone = css.slice(css.indexOf("@media (max-width:800px){"), css.indexOf("@media (max-width:520px)"));
+  const rule = (selector) => {
+    const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const match = phone.match(new RegExp(`(?:^|[}\\s])${escaped}\\{([^}]*)\\}`));
+    assert.ok(match, `missing rule ${selector}`);
+    return match[1];
+  };
+
+  // The map is never removed from the layout, only made invisible under
+  // another tab.
+  assert.ok(!/(#map|\.map-wrap)[^{]*\{[^}]*display:none/.test(phone));
+  assert.match(phone, /#app\[data-active-tab\]:not\(\[data-active-tab="map"\]\) :is\(#map,[^)]*\)\{visibility:hidden\}/);
+
+  // Inactive tab content is hidden, not collapsed, so scroll position survives.
+  assert.match(rule("[data-tab-panel]"), /visibility:hidden/);
+  assert.ok(!/display:none/.test(rule("[data-tab-panel]")));
+  assert.match(rule("[data-tab-panel].tab-panel-active"), /visibility:visible/);
+  assert.match(rule(".sidebar-scroll"), /overflow-y:auto/);
+
+  // County and Region filters are shown again on phones.
+  assert.ok(!/\.row\{display:none\}/.test(phone));
+
+  // Bar: 56px plus the home-indicator area, hairline top border, no shadow,
+  // opaque unless blur is supported.
+  assert.match(phone, /--tab-bar-height:calc\(56px \+ env\(safe-area-inset-bottom\)\)/);
+  const bar = rule(".tab-bar");
+  assert.match(bar, /padding-bottom:env\(safe-area-inset-bottom\)/);
+  assert.match(bar, /background:var\(--paper\)/);
+  assert.match(bar, /border-top:1px solid var\(--line\)/);
+  assert.ok(!/box-shadow/.test(bar));
+  assert.match(
+    phone,
+    /@supports \(\(-webkit-backdrop-filter:blur\(20px\)\) or \(backdrop-filter:blur\(20px\)\)\)\{\s*\.tab-bar\{background:rgba\(255,255,255,\.9[2-5]\);-webkit-backdrop-filter:blur\(20px\);backdrop-filter:blur\(20px\)\}/
+  );
+
+  // Equal-width, full-height tabs; active state is never color alone.
+  assert.match(rule(".tab-btn"), /flex:1 1 0;min-width:0;height:100%/);
+  assert.match(rule('.tab-btn[aria-selected="true"]'), /color:[^;]+;font-weight:800/);
+  assert.match(rule('.tab-btn[aria-selected="true"] .tab-icon-shape'), /fill:currentColor/);
+
+  // The map area ends at the top of the bar (the panel-offset code needs no
+  // change), and the sheet and hint sit at the bottom of the map area. The
+  // sheet is docked on the bar: full width, hairline border, top corners only.
+  assert.match(rule(".map-wrap"), /bottom:var\(--tab-bar-height\)/);
+  assert.match(rule(".map-hint"), /bottom:14px/);
+  const sheet = rule(".sheet");
+  assert.match(sheet, /left:0;right:0;bottom:0/);
+  assert.match(sheet, /border:1px solid var\(--line\);border-bottom:0;border-radius:var\(--radius\) var\(--radius\) 0 0/);
+
+  // The old dropdown toggle is hidden everywhere.
+  assert.match(css, /^\.mobile-panel-toggle\{display:none\}/m);
+  assert.ok(!/mobile-panel-open/.test(css));
+});
+
+test("phone Map tab has a slim one-row header styled like the tab bar", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const read = (path) => readFile(new URL(path, import.meta.url), "utf8");
+  const [html, css, ui] = await Promise.all([
+    read("../index.html"),
+    read("../src/mobile-panel.css"),
+    read("../src/ui.js")
+  ]);
+  const phone = css.slice(css.indexOf("@media (max-width:800px){"), css.indexOf("@media (max-width:520px)"));
+  const header = html.slice(html.indexOf('<header class="map-header"'), html.indexOf("</header>"));
+
+  // Same logo file, app name and Beta badge; no tagline or progress card.
+  assert.match(header, /<img class="map-header-logo" src="\.\/ridge-trail-logo\.png" alt="Bay Area Ridge Trail" \/>/);
+  assert.match(header, /Ridge Trail Passport/);
+  assert.match(header, /class="beta-badge"/);
+  assert.ok(!/progress|brand-intro/.test(header));
+
+  // Hidden on desktop and on every tab but Map.
+  assert.match(css, /^\.tab-bar,\.map-header\{display:none\}/m);
+  assert.match(phone, /:not\(\[data-active-tab="map"\]\) :is\([^)]*\.map-header\)\{visibility:hidden\}/);
+
+  // Slim, clears the notch, same see-through treatment as the tab bar, with
+  // a solid strip behind the status-bar area.
+  assert.match(phone, /--map-header-height:calc\(52px \+ env\(safe-area-inset-top\)\)/);
+  const rule = phone.match(/\.map-header\{([^}]*)\}/)[1];
+  assert.match(rule, /height:var\(--map-header-height\)/);
+  assert.match(rule, /padding:env\(safe-area-inset-top\)/);
+  assert.match(rule, /background:var\(--paper\);border-bottom:1px solid var\(--line\)/);
+  assert.ok(!/box-shadow/.test(rule));
+  assert.match(phone, /\.map-header\{background:rgba\(255,255,255,\.93\);-webkit-backdrop-filter:blur\(20px\);backdrop-filter:blur\(20px\)\}/);
+  assert.match(phone, /\.map-header::before\{[^}]*position:fixed;top:0;[^}]*height:env\(safe-area-inset-top\);background:var\(--paper\)\}/);
+
+  // The map area starts below the header, as it ends above the tab bar.
+  assert.match(phone, /\.map-wrap\{position:absolute;top:var\(--map-header-height\);[^}]*bottom:var\(--tab-bar-height\)/);
+
+  // Zoom framing measures the Map-tab header, never the hidden section list.
+  const covered = ui.slice(ui.indexOf("function coveredMapEdges()"), ui.indexOf("// The search box only changes the list"));
+  assert.match(covered, /const header = \$\("mapHeader"\);/);
+  assert.match(covered, /headerShowing \? header\.getBoundingClientRect\(\) : null/);
+  assert.ok(!/aside/.test(covered.replace(/\/\/.*$/gm, "")));
+});
+
+test("zoom framing with the phone header above the map: sheet below, nothing on top", () => {
+  // 390x844 phone: header 0-52, map 52-732, tab bar 732-844, sheet 400-732.
+  const map = box(0, 52, 390, 732);
+  const sheet = box(0, 400, 390, 732);
+  const header = box(0, 0, 390, 52);
+
+  assert.deepEqual(coveredEdges(map, sheet, header), { top: 0, right: 0, bottom: 332, left: 0 });
+  // If the header were ever moved over the map, it would be counted.
+  assert.deepEqual(
+    coveredEdges(box(0, 0, 390, 732), sheet, header),
+    { top: 52, right: 0, bottom: 332, left: 0 }
+  );
+});
+
+test("on phones Help covers the whole screen, header and tab bar included", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const read = (path) => readFile(new URL(path, import.meta.url), "utf8");
+  const [help, mobile] = await Promise.all([read("../src/help.css"), read("../src/mobile-panel.css")]);
+  const phoneHelp = help.slice(help.indexOf("@media (max-width:800px){"));
+  const zIndex = (css, selector) => Number(css.match(new RegExp(`${selector}\\{[^}]*z-index:(\\d+)`))[1]);
+
+  // Fixed to the screen rather than to the map area, which now stops short
+  // of the header and the tab bar.
+  assert.match(phoneHelp, /\.help-backdrop\{position:fixed;[^}]*env\(safe-area-inset-bottom\)/);
+  assert.ok(zIndex(help, "\\.help-backdrop") > zIndex(mobile, "\\.tab-bar"));
+  assert.ok(zIndex(help, "\\.help-backdrop") > zIndex(mobile, "\\.map-header"));
+});
+
+test("phone tab bar is an accessible tab list with arrow-key navigation", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const source = await readFile(new URL("../src/tab-bar.js", import.meta.url), "utf8");
+
+  assert.match(source, /bar\.setAttribute\("role", "tablist"\)/);
+  assert.match(source, /button\.setAttribute\("role", "tab"\)/);
+  assert.match(source, /button\.setAttribute\("aria-selected", String\(active\)\)/);
+  assert.match(source, /button\.tabIndex = active \? 0 : -1/);
+  for (const key of ["ArrowLeft", "ArrowRight", "Home", "End"]) {
+    assert.ok(source.includes(`${key}:`), `missing ${key}`);
+  }
+  // The tabs do not use the old toggle's attributes.
+  assert.ok(!/aria-expanded|aria-controls|aria-current/.test(source));
+});
+
+test("map hint: stays dismissed once saved, and shows when storage is unavailable", () => {
+  const storage = new MemoryStorage();
+
+  assert.equal(isMapHintDismissed(storage), false);
+  assert.equal(saveMapHintDismissed(storage), true);
+  assert.equal(isMapHintDismissed(storage), true);
+
+  // Fails open: no storage, blocked storage, or a failed save all mean the
+  // hint is shown.
+  assert.equal(isMapHintDismissed(null), false);
+  assert.equal(isMapHintDismissed({ getItem() { throw new Error("SecurityError"); } }), false);
+  const failing = new FailingStorage();
+  assert.equal(saveMapHintDismissed(failing), false);
+  assert.equal(isMapHintDismissed(failing), false);
+});
+
+test("map hint flag is kept apart from progress and left out of backups", () => {
+  const key = CONFIG.mapHint.storageKey;
+  assert.notEqual(key, CONFIG.storageKey);
+  assert.notEqual(key, CONFIG.betaNotice.storageKey);
+  assert.ok(!key.startsWith("segment-"));
+
+  const storage = new MemoryStorage();
+  const store = createProgressStore({ storage });
+  store.toggle({ Segment_ID: "RT-1", Trail_Type: "Primary" });
+  saveMapHintDismissed(storage);
+
+  const backup = store.exportData();
+  assert.deepEqual(backup.completed.map((entry) => entry.segmentId), ["RT-1"]);
+  assert.ok(!JSON.stringify(backup).includes(key));
+});
+
+test("map hint is dismissed by selecting a section, not by closing one", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const read = (path) => readFile(new URL(path, import.meta.url), "utf8");
+  const [main, ui] = await Promise.all([read("../src/main.js"), read("../src/ui.js")]);
+  const select = main.slice(main.indexOf("function selectFeature("), main.indexOf("function clearSelection("));
+
+  assert.match(select, /renderAll\(\);[\s\S]*ui\.dismissMapHint\(\);/);
+  // With nothing selected the hint comes back only if it was never dismissed.
+  assert.match(ui, /\$\("mapHint"\)\.classList\.toggle\("hide", mapHintDismissed\);/);
+  assert.ok(!/\$\("mapHint"\)\.classList\.remove\("hide"\)/.test(ui));
 });

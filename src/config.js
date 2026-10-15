@@ -75,6 +75,12 @@ export const CONFIG = {
     version: 1
   },
 
+  // Set once a visitor has selected a section, so the map hint stops
+  // showing (see src/map-hint.js). Not progress, and not in backups.
+  mapHint: {
+    storageKey: "ridgeTrailPassportMapHintDismissed"
+  },
+
   // Google Form for beta feedback. Opened only when someone taps a Feedback
   // button; the Passport never sends anything to it on its own.
   feedbackFormUrl:

@@ -14,6 +14,7 @@ import {
   writeCachedTrailFeatures
 } from "./offline.js";
 import { createProgressStore, ProgressNotSavedError } from "./progress.js";
+import { createTabBar } from "./tab-bar.js";
 import { createUI } from "./ui.js";
 import { acknowledgeBetaNotice, isBetaNoticeAcknowledged } from "./beta-notice.js";
 import { CONFIG } from "./config.js";
@@ -29,6 +30,7 @@ const progressStore = createProgressStore();
 
 let ridgeMap;
 let ui;
+let tabBar;
 
 function selectedFeature() {
   return (
@@ -60,6 +62,7 @@ function selectFeature(feature, { fit = false } = {}) {
 
   renderAll();
   ui.scrollSelectedIntoView(selectedObjectId);
+  ui.dismissMapHint();
 
   // Measured now that the detail panel is showing this section, so the map
   // can keep the section out from under it.
@@ -83,14 +86,7 @@ function goHome() {
   selectedObjectId = null;
   renderAll();
 
-  const app = $("app");
-  const panelButton = $("mobilePanelToggle");
-  app.classList.remove("mobile-panel-open");
-
-  if (panelButton) {
-    panelButton.setAttribute("aria-expanded", "false");
-    panelButton.setAttribute("aria-label", "Expand section browser");
-  }
+  tabBar?.showTab("map");
 
   ridgeMap.resetView();
 }
@@ -188,20 +184,26 @@ function resetProgress() {
   ui.showStatus("Progress reset.");
 }
 
-function initializeMobilePanelToggle() {
-  const app = $("app");
-  const button = $("mobilePanelToggle");
+// Phones get a bottom tab bar (Map, Sections) in place of the old dropdown
+// panel. The old toggle button is still in index.html but hidden by CSS.
+function initializeMobileTabs() {
+  const bar = $("tabBar");
+  if (bar) tabBar = createTabBar(bar, $("app"));
+}
 
-  if (!button) return;
+// Tapping a section in the list. The Map tab must be showing BEFORE
+// selectFeature runs: selectFeature measures the detail sheet straight away
+// (ui.coveredMapEdges) to keep the section clear of it, and that measurement
+// is only right once the map, not the Sections tab, is on screen.
+// The search text is left as it is, on purpose.
+//
+// On phones, focus then goes to the section's detail sheet, since the list
+// item that was tapped is now hidden.
+function selectFeatureFromList(feature, options) {
+  tabBar?.showTab("map", { moveFocus: false });
+  selectFeature(feature, options);
 
-  button.addEventListener("click", () => {
-    const expanded = app.classList.toggle("mobile-panel-open");
-    button.setAttribute("aria-expanded", String(expanded));
-    button.setAttribute(
-      "aria-label",
-      expanded ? "Collapse section browser" : "Expand section browser"
-    );
-  });
+  if (tabBar?.isShowing()) $("sheet").focus({ preventScroll: true });
 }
 
 function initializeHelpPanel() {
@@ -552,13 +554,13 @@ function initializeBackgroundRefresh() {
 async function initialize() {
   initializeBetaNotice();
   initializeFeedbackLinks();
-  initializeMobilePanelToggle();
+  initializeMobileTabs();
   initializeHelpPanel();
   initializeCompanionLinks();
 
   ui = createUI({
     progressStore,
-    onSelect: selectFeature,
+    onSelect: selectFeatureFromList,
     onToggleComplete: toggleComplete,
     onFiltersChange: handleFiltersChange,
     onSearchInput: () => ui.renderList(features, selectedObjectId),
