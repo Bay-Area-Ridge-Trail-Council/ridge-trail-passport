@@ -1139,11 +1139,11 @@ test("search narrows the list but never hides sections from the map; other filte
 
   // The map is drawn from the search-free list.
   const main = await (await import("node:fs/promises")).readFile(new URL("../src/main.js", import.meta.url), "utf8");
-  assert.match(main, /function visibleFeatures\(\) \{\s*return ui\.filterFeatures\(features, \{ includeSearch: false \}\);/);
+  assert.match(main, /function visibleFeatures\(\) \{\s*return ui\.filterFeatures\(features, \{\s*includeSearch: false,\s*includeUncompletedOnly: false\s*\}\);/);
   assert.match(main, /const visible = visibleFeatures\(\);\s*ridgeMap\.render\(visible, selectedObjectId\);/);
 });
 
-test("typing in search updates the list only; County, Region and Uncompleted only update the map", async (t) => {
+test("typing in search updates the list only; County, Region and Uncompleted only trigger a full refresh", async (t) => {
   t.after(() => { delete globalThis.window; delete globalThis.document; });
   const element = fakeSearchPage();
   const { createUI } = await import("../src/ui.js");
@@ -1161,6 +1161,29 @@ test("typing in search updates the list only; County, Region and Uncompleted onl
 
   for (const id of ["county", "region", "unfinished"]) element(id).dispatch("change");
   assert.deepEqual(calls, ["list", "filters", "filters", "filters"]);
+});
+
+test("Uncompleted only narrows the list but never hides completed sections from the map", async (t) => {
+  t.after(() => { delete globalThis.window; delete globalThis.document; });
+  const element = fakeSearchPage();
+  const { createUI } = await import("../src/ui.js");
+  const progressStore = createProgressStore({ storage: new MemoryStorage() });
+  const ui = createUI({ progressStore });
+  const ids = (list) => list.map((feature) => feature.properties.OBJECTID);
+  const features = searchTestFeatures();
+  const forMap = { includeSearch: false, includeUncompletedOnly: false };
+
+  progressStore.toggle(features[0].properties);
+  element("unfinished").checked = true;
+
+  // The list drops the completed section; the map keeps every section.
+  assert.deepEqual(ids(ui.filterFeatures(features)), [2, 3]);
+  assert.deepEqual(ids(ui.filterFeatures(features, forMap)), [1, 2, 3]);
+
+  // County still narrows the map, as before.
+  element("county").value = "Marin";
+  assert.deepEqual(ids(ui.filterFeatures(features)), [3]);
+  assert.deepEqual(ids(ui.filterFeatures(features, forMap)), [1, 3]);
 });
 
 test("search clear button: shown only with a query, clears just the search, and returns focus", async (t) => {

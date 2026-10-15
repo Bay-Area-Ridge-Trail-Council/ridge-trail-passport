@@ -40,11 +40,14 @@ function selectedFeature() {
   );
 }
 
-// The sections drawn on the map. Search is left out on purpose: it narrows
-// the list, but the map keeps showing every section so visitors keep their
-// bearings. County, Region and "Uncompleted only" still apply to the map.
+// The sections drawn on the map. Search and "Uncompleted only" are left out
+// on purpose: they narrow the list, but the map keeps showing every section
+// so visitors keep their bearings. County and Region still apply to the map.
 function visibleFeatures() {
-  return ui.filterFeatures(features, { includeSearch: false });
+  return ui.filterFeatures(features, {
+    includeSearch: false,
+    includeUncompletedOnly: false
+  });
 }
 
 function renderAll() {
